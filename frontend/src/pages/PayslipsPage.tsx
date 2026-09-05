@@ -204,7 +204,20 @@ export default function PayslipsPage() {
                           </span>
                         )}
                       </div>
-                      <span className="block text-xs font-normal text-slate-400">{slip.employee?.job_position?.title}</span>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-slate-400 mt-0.5">
+                        <span>{slip.employee?.job_position?.title}</span>
+                        {slip.contract && (
+                          <>
+                            <span>•</span>
+                            <span className="font-mono text-indigo-600 font-semibold">{slip.contract.reference}</span>
+                            {slip.contract.salary_structure?.name && (
+                              <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200">
+                                {slip.contract.salary_structure.name}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 text-xs font-mono text-slate-600">
                       <div className="flex items-center gap-1.5">
@@ -327,6 +340,26 @@ export default function PayslipsPage() {
             </div>
 
             <div className="space-y-4">
+              {/* Contract & Structure Provenance */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Contract Reference</span>
+                  <span className="font-mono font-bold text-indigo-700">{selectedPayslip.contract?.reference || 'Direct / Fallback'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Salary Structure</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedPayslip.contract?.salary_structure?.name || selectedPayslip.payrun?.salary_structure?.name || 'Standard Regular Structure'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Base Contract Wage</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {selectedPayslip.contract?.wage ? `₹${selectedPayslip.contract.wage.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : 'N/A'}
+                  </span>
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="text-slate-500 block">Gross Salary</span>

@@ -71,6 +71,14 @@ def generate_payslip_pdf(payslip: Payslip, output_dir: str = "generated_payslips
     dept_name = emp.department.name if emp.department else "General"
     pos_title = emp.job_position.title if emp.job_position else "Staff"
 
+    contract = payslip.contract
+    contract_ref = contract.reference if contract else "N/A"
+    contract_wage = f"INR {contract.wage:,.2f}" if contract else "N/A"
+    struct_name = (
+        contract.salary_structure.name if contract and contract.salary_structure
+        else (payslip.payrun.salary_structure.name if payslip.payrun and payslip.payrun.salary_structure else "Standard")
+    )
+
     emp_meta = [
         [
             Paragraph("<b>Employee Name:</b>", header_lbl_style),
@@ -99,8 +107,14 @@ def generate_payslip_pdf(payslip: Payslip, output_dir: str = "generated_payslips
         [
             Paragraph("<b>Worked Days:</b>", header_lbl_style),
             Paragraph(f"{payslip.worked_days} of {payslip.scheduled_days} scheduled", header_val_style),
-            Paragraph("", header_lbl_style),
-            Paragraph("", header_val_style),
+            Paragraph("<b>Contract Ref:</b>", header_lbl_style),
+            Paragraph(contract_ref, header_val_style),
+        ],
+        [
+            Paragraph("<b>Salary Structure:</b>", header_lbl_style),
+            Paragraph(struct_name, header_val_style),
+            Paragraph("<b>Base Contract Wage:</b>", header_lbl_style),
+            Paragraph(contract_wage, header_val_style),
         ],
     ]
 
@@ -121,14 +135,14 @@ def generate_payslip_pdf(payslip: Payslip, output_dir: str = "generated_payslips
             Paragraph("<b>Seq</b>", header_lbl_style),
             Paragraph("<b>Salary Component / Rule</b>", header_lbl_style),
             Paragraph("<b>Category</b>", header_lbl_style),
-            Paragraph("<b>Amount ($)</b>", header_lbl_style),
+            Paragraph("<b>Amount (INR)</b>", header_lbl_style),
         ]
     ]
 
     for line in payslip.lines:
-        amt_str = f"${line.amount:,.2f}"
+        amt_str = f"INR {line.amount:,.2f}"
         if line.category in ["DEDUCTION"]:
-            amt_str = f"(${line.amount:,.2f})"
+            amt_str = f"(INR {line.amount:,.2f})"
 
         lines_data.append([
             Paragraph(str(line.sequence), header_lbl_style),
@@ -154,15 +168,15 @@ def generate_payslip_pdf(payslip: Payslip, output_dir: str = "generated_payslips
     summary_data = [
         [
             Paragraph("<b>Gross Salary (After LOP):</b>", header_lbl_style),
-            Paragraph(f"<b>${payslip.gross_pay:,.2f}</b>", header_val_style),
+            Paragraph(f"<b>INR {payslip.gross_pay:,.2f}</b>", header_val_style),
         ],
         [
             Paragraph("<b>Total Statutory Deductions:</b>", header_lbl_style),
-            Paragraph(f"<b>(${payslip.total_deductions:,.2f})</b>", header_val_style),
+            Paragraph(f"<b>(INR {payslip.total_deductions:,.2f})</b>", header_val_style),
         ],
         [
             Paragraph("<font size='11'><b>NET TAKE-HOME SALARY PAYABLE:</b></font>", header_lbl_style),
-            Paragraph(f"<font size='12' color='#10B981'><b>${payslip.net_pay:,.2f}</b></font>", header_val_style),
+            Paragraph(f"<font size='12' color='#10B981'><b>INR {payslip.net_pay:,.2f}</b></font>", header_val_style),
         ]
     ]
 

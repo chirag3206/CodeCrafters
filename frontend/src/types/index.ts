@@ -68,7 +68,10 @@ export interface Employee {
   manager_id: number | null;
   working_schedule_id: number | null;
   employment_type: 'Full-Time' | 'Part-Time' | 'Contractor';
-  status: 'Active' | 'Inactive' | 'On Leave';
+  status: 'Active' | 'Inactive' | 'On Leave' | 'Retired' | 'Terminated' | 'Left Job' | 'Resigned';
+  departure_reason?: string | null;
+  departure_date?: string | null;
+  departure_notes?: string | null;
   hire_date: string | null;
   gender: string | null;
   date_of_birth: string | null;
@@ -88,16 +91,23 @@ export interface Employee {
 export interface Contract {
   id: number;
   reference: string;
+  name?: string | null;
   employee_id: number;
+  contract_type?: string | null;
+  department_id?: number | null;
+  job_position_id?: number | null;
   salary_structure_id: number | null;
   working_schedule_id: number | null;
   wage: number;
+  payment_frequency?: string | null;
   start_date: string;
   end_date: string | null;
   status: 'Draft' | 'Active' | 'Expired' | 'Terminated';
   notes: string | null;
   created_at: string;
   employee: Employee | null;
+  department?: Department | null;
+  job_position?: JobPosition | null;
   salary_structure: SalaryStructure | null;
   working_schedule: WorkingSchedule | null;
 }
@@ -234,6 +244,7 @@ export interface Payslip {
   pdf_path: string | null;
   created_at: string;
   employee: Employee | null;
+  contract?: Contract | null;
   lines: PayslipLine[];
   payrun: Payrun | null;
 }

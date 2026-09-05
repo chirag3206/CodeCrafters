@@ -6,7 +6,7 @@ import type { Payrun, Payslip } from '../types';
 import {
   Zap, Send, ShieldCheck, CreditCard,
   Mail, FileSpreadsheet, Download, AlertTriangle, ArrowLeft,
-  X, MessageSquare, Eye, CheckCircle2, Clock
+  X, MessageSquare, Eye, CheckCircle2, Clock, FileDown, ChevronDown
 } from 'lucide-react';
 
 export default function PayrunDetailPage() {
@@ -26,6 +26,9 @@ export default function PayrunDetailPage() {
   const [resolvingPayslip, setResolvingPayslip] = useState<Payslip | null>(null);
   const [resolutionAction, setResolutionAction] = useState<'accept_adjust' | 'reject'>('accept_adjust');
   const [resolutionNotes, setResolutionNotes] = useState('');
+
+  // Download dropdown (PDF / CSV) per slip row
+  const [downloadDropdownSlipId, setDownloadDropdownSlipId] = useState<number | null>(null);
 
   const loadData = async () => {
     if (!id) return;
@@ -519,7 +522,20 @@ export default function PayrunDetailPage() {
                         </span>
                       )}
                     </div>
-                    <span className="block text-[11px] font-normal text-slate-400">{slip.employee?.department?.name}</span>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
+                      <span>{slip.employee?.department?.name}</span>
+                      {slip.contract && (
+                        <>
+                          <span>•</span>
+                          <span className="font-mono text-indigo-600 font-semibold">{slip.contract.reference}</span>
+                          {slip.contract.salary_structure?.name && (
+                            <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200">
+                              {slip.contract.salary_structure.name}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 px-4 text-xs font-mono text-slate-600">{slip.scheduled_days}d</td>
                   <td className="py-3 px-4 text-xs font-mono text-slate-800">{slip.worked_days}d</td>
@@ -556,14 +572,52 @@ export default function PayrunDetailPage() {
                     )}
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => setSelectedPayslip(slip)}
-                      className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700"
-                      title="Inspect Sequenced Breakdown"
-                    >
-                      <Eye size={15} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Inspect breakdown modal */}
+                      <button
+                        onClick={() => setSelectedPayslip(slip)}
+                        className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                        title="Inspect Sequenced Breakdown"
+                      >
+                        <Eye size={15} />
+                      </button>
+
+                      {/* PDF / CSV download dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setDownloadDropdownSlipId(downloadDropdownSlipId === slip.id ? null : slip.id)}
+                          className="flex items-center gap-0.5 p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                          title="Download Payslip"
+                        >
+                          <FileDown size={15} />
+                          <ChevronDown size={10} />
+                        </button>
+                        {downloadDropdownSlipId === slip.id && (
+                          <div className="absolute right-0 top-full mt-1 z-20 w-36 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                            <a
+                              href={payslipsApi.pdfUrl(slip.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={() => setDownloadDropdownSlipId(null)}
+                              className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                            >
+                              <Download size={12} />
+                              Download PDF
+                            </a>
+                            <a
+                              href={payslipsApi.csvUrl(slip.id)}
+                              onClick={() => setDownloadDropdownSlipId(null)}
+                              className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                            >
+                              <FileSpreadsheet size={12} />
+                              Download CSV
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </td>
+
                 </tr>
               ))}
             </tbody>
@@ -594,6 +648,26 @@ export default function PayrunDetailPage() {
             </div>
 
             <div className="space-y-4">
+              {/* Contract & Structure Provenance */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Contract Reference</span>
+                  <span className="font-mono font-bold text-indigo-700">{selectedPayslip.contract?.reference || 'Direct / Fallback'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Salary Structure</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedPayslip.contract?.salary_structure?.name || selectedPayslip.payrun?.salary_structure?.name || 'Standard Regular Structure'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Base Contract Wage</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {selectedPayslip.contract?.wage ? `₹${selectedPayslip.contract.wage.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : 'N/A'}
+                  </span>
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-2 text-center text-xs">
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="text-slate-500 block">Gross Salary</span>
@@ -636,14 +710,23 @@ export default function PayrunDetailPage() {
               </div>
 
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <a
-                  href={payslipsApi.pdfUrl(selectedPayslip.id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-indigo-600 font-semibold hover:underline"
-                >
-                  <Download size={13} /> Printable PDF Payslip
-                </a>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={payslipsApi.pdfUrl(selectedPayslip.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-rose-600 font-semibold hover:underline"
+                  >
+                    <Download size={13} /> PDF
+                  </a>
+                  <span className="text-slate-200">|</span>
+                  <a
+                    href={payslipsApi.csvUrl(selectedPayslip.id)}
+                    className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold hover:underline"
+                  >
+                    <FileSpreadsheet size={13} /> CSV
+                  </a>
+                </div>
                 <button
                   type="button"
                   onClick={() => setSelectedPayslip(null)}

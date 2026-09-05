@@ -81,6 +81,17 @@ def require_payroll_user(current_user: CurrentUser) -> User:
     return current_user
 
 
+def require_hr_or_payroll(current_user: CurrentUser) -> User:
+    """For HR & Payroll operations: allows HR Manager, Payroll Specialists, and Admins to inspect structures/rules."""
+    allowed = {UserRole.HR_MANAGER, UserRole.HR_PAYROLL_USER, UserRole.HR_PAYROLL_MANAGER, UserRole.ADMIN}
+    if current_user.role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: HR Manager, Payroll Specialist, or Admin role required.",
+        )
+    return current_user
+
+
 def require_payroll_manager(current_user: CurrentUser) -> User:
     """Strictly for Financial Governance: salary rules configuration, final validation sign-off, mark paid, bank disbursement."""
     allowed = {UserRole.HR_PAYROLL_MANAGER, UserRole.ADMIN}

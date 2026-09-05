@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { employeesApi } from '../services/api';
-import type { Employee, Department, JobPosition } from '../types';
+import type { Employee, Department } from '../types';
+import EmployeeModal from '../components/EmployeeModal';
 import {
   Users, LayoutGrid, List as ListIcon, Plus, Search,
-  Building2, Mail, ChevronRight, X
+  Building2, Mail, Edit3, Trash2, AlertTriangle
 } from 'lucide-react';
 
 export default function EmployeesPage() {
@@ -14,7 +15,6 @@ export default function EmployeesPage() {
   const canManageEmployees = user?.role === 'HR_Manager' || user?.role === 'Admin';
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
 
@@ -22,37 +22,29 @@ export default function EmployeesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState<number | ''>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'newest' | 'name'>('newest');
 
-  // Modal
+  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    work_email: '',
-    work_phone: '',
-    department_id: '',
-    job_position_id: '',
-    employment_type: 'Full-Time',
-    bank_name: '',
-    bank_account_no: '',
-    ifsc_swift: '',
-  });
+  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
+  const [deletingEmpId, setDeletingEmpId] = useState<number | null>(null);
+  const [offboardReason, setOffboardReason] = useState<string>('Resigned');
+  const [offboardNotes, setOffboardNotes] = useState<string>('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [empRes, deptRes, posRes] = await Promise.all([
+      const [empRes, deptRes] = await Promise.all([
         employeesApi.list({
           q: searchQuery || undefined,
           department_id: selectedDept ? Number(selectedDept) : undefined,
           status: selectedStatus || undefined,
         }),
         employeesApi.departments(),
-        employeesApi.jobPositions(),
       ]);
       setEmployees(empRes.data);
       setDepartments(deptRes.data);
-      setJobPositions(posRes.data);
     } catch (err) {
       console.error('Failed to load employees', err);
     } finally {
@@ -64,32 +56,45 @@ export default function EmployeesPage() {
     loadData();
   }, [searchQuery, selectedDept, selectedStatus]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOpenAdd = () => {
+    setEditingEmployee(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (emp: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingEmployee(emp);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenDelete = (empId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDeletingEmpId(empId);
+    setOffboardReason('Resigned');
+    setOffboardNotes('');
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingEmpId) return;
     try {
-      await employeesApi.create({
-        ...formData,
-        department_id: formData.department_id ? Number(formData.department_id) : null,
-        job_position_id: formData.job_position_id ? Number(formData.job_position_id) : null,
+      setIsDeleting(true);
+      await employeesApi.offboard(deletingEmpId, {
+        reason: offboardReason,
+        notes: offboardNotes.trim() || undefined,
       });
-      setIsModalOpen(false);
-      setFormData({
-        first_name: '',
-        last_name: '',
-        work_email: '',
-        work_phone: '',
-        department_id: '',
-        job_position_id: '',
-        employment_type: 'Full-Time',
-        bank_name: '',
-        bank_account_no: '',
-        ifsc_swift: '',
-      });
+      setDeletingEmpId(null);
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to create employee');
+      alert(err.response?.data?.detail || 'Failed to offboard employee');
+    } finally {
+      setIsDeleting(false);
     }
   };
+
+  const displayedEmployees = [...employees].sort((a, b) => {
+    if (sortBy === 'newest') return b.id - a.id;
+    return a.full_name.localeCompare(b.full_name);
+  });
 
   return (
     <div className="space-y-6">
@@ -98,10 +103,13 @@ export default function EmployeesPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
             <Users className="text-indigo-600" size={26} />
-            Employee Master Directory
+            Employee Directory
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {employees.length} {employees.length === 1 ? 'Employee' : 'Employees'}
+            </span>
           </h1>
           <p className="text-slate-500 text-xs mt-0.5">
-            Centralized profile repository, employment terms, and smart operational counters.
+            Manage employee profiles, roles, organization hierarchy, and bank details.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -130,11 +138,11 @@ export default function EmployeesPage() {
           {canManageEmployees && (
             <button
               id="btn-new-employee"
-              onClick={() => setIsModalOpen(true)}
-              className="btn-primary text-xs font-semibold"
+              onClick={handleOpenAdd}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 hover:from-brand-500 hover:to-violet-500 text-white font-medium text-xs shadow-glow transition-all duration-200"
             >
               <Plus size={16} />
-              New Employee
+              Add Employee
             </button>
           )}
         </div>
@@ -146,7 +154,7 @@ export default function EmployeesPage() {
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by name or email..."
+            placeholder="Search by name, email, or badge ID (e.g. EMP-013)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-3.5 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -171,15 +179,28 @@ export default function EmployeesPage() {
         >
           <option value="">All Statuses</option>
           <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
+          <option value="Retired">Retired</option>
+          <option value="Terminated">Terminated</option>
+          <option value="Left Job">Left Job</option>
+          <option value="Resigned">Resigned</option>
           <option value="On Leave">On Leave</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as 'newest' | 'name')}
+          className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+        >
+          <option value="newest">Sort: Newest First</option>
+          <option value="name">Sort: Name (A–Z)</option>
         </select>
       </div>
 
       {/* Content */}
       {isLoading ? (
         <div className="text-center py-16 text-slate-400">Loading directory...</div>
-      ) : employees.length === 0 ? (
+      ) : displayedEmployees.length === 0 ? (
         <div className="bg-white p-12 text-center text-slate-400 rounded-xl border border-slate-200 shadow-xs">
           <Users size={36} className="mx-auto mb-3 text-slate-300" />
           <p className="text-lg font-medium text-slate-700">No employees found</p>
@@ -187,7 +208,7 @@ export default function EmployeesPage() {
         </div>
       ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {employees.map((emp) => (
+          {displayedEmployees.map((emp) => (
             <div
               key={emp.id}
               onClick={() => navigate(`/employees/${emp.id}`)}
@@ -215,9 +236,39 @@ export default function EmployeesPage() {
                     </div>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {emp.status}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                    emp.status === 'Active'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : emp.status === 'Retired'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : emp.status === 'Terminated'
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : emp.status === 'Left Job' || emp.status === 'Resigned'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}>
+                    {emp.status}
+                  </span>
+                  {canManageEmployees && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => handleOpenEdit(emp, e)}
+                        title="Edit Employee"
+                        className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        onClick={(e) => handleOpenDelete(emp.id, e)}
+                        title="Offboard / Remove Employee"
+                        className="p-1 rounded-lg hover:bg-rose-50 text-slate-500 hover:text-rose-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-1.5 text-xs text-slate-600">
@@ -273,7 +324,7 @@ export default function EmployeesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {employees.map((emp) => (
+                {displayedEmployees.map((emp) => (
                   <tr
                     key={emp.id}
                     onClick={() => navigate(`/employees/${emp.id}`)}
@@ -302,12 +353,41 @@ export default function EmployeesPage() {
                     <td className="py-3 px-4 text-slate-700">{emp.job_position?.title || '—'}</td>
                     <td className="py-3 px-4 text-slate-500 text-xs">{emp.employment_type}</td>
                     <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                        emp.status === 'Active'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : emp.status === 'Retired'
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : emp.status === 'Terminated'
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : emp.status === 'Left Job' || emp.status === 'Resigned'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}>
                         {emp.status}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <ChevronRight size={16} className="inline text-slate-400" />
+                      <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        {canManageEmployees && (
+                          <>
+                            <button
+                              onClick={(e) => handleOpenEdit(emp, e)}
+                              className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                            <button
+                              onClick={(e) => handleOpenDelete(emp.id, e)}
+                              className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                              title="Offboard / Remove"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -317,127 +397,84 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      {/* New Employee Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white max-w-lg w-full p-6 rounded-2xl shadow-xl border border-slate-200 animate-slide-up max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <h2 className="text-lg font-bold text-slate-900">Add New Employee</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
-              </button>
+      {/* Add / Edit Employee Modal */}
+      <EmployeeModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={loadData}
+        employeeToEdit={editingEmployee}
+      />
+
+      {/* Delete / Offboard Employee Modal */}
+      {deletingEmpId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-xl">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900">Offboard / Remove Employee</h3>
+                <p className="text-xs text-slate-500">Record employee exit and automatically conclude contracts.</p>
+              </div>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="field-label">First Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Vikram"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="input-field"
-                  />
-                </div>
-                <div>
-                  <label className="field-label">Last Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Singhania"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="input-field"
-                  />
-                </div>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1">
+              <p className="font-semibold">⚠️ Automatic Actions on Confirmation:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-amber-700 text-[11px]">
+                <li>Employee status will be updated to selected departure state</li>
+                <li>All <b>active and draft contracts</b> will automatically move to <b>Expired</b> (end date set to today)</li>
+                <li>User portal login will be disabled; payroll history remains preserved</li>
+              </ul>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Departure Reason *
+                </label>
+                <select
+                  value={offboardReason}
+                  onChange={(e) => setOffboardReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="Resigned">Resigned</option>
+                  <option value="Retired">Retired</option>
+                  <option value="Terminated">Terminated</option>
+                  <option value="Left Job">Left Job</option>
+                  <option value="Contract Ended">Contract Ended</option>
+                </select>
               </div>
 
               <div>
-                <label className="field-label">Work Email *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="vikram.s@peoplepay360.com"
-                  value={formData.work_email}
-                  onChange={(e) => setFormData({ ...formData, work_email: e.target.value })}
-                  className="input-field"
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Departure Notes / Remarks (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={offboardNotes}
+                  onChange={(e) => setOffboardNotes(e.target.value)}
+                  placeholder="e.g. Completed exit interview, handed over laptop and credentials..."
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="field-label">Department</label>
-                  <select
-                    value={formData.department_id}
-                    onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                    className="input-field"
-                  >
-                    <option value="">Select Department</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="field-label">Job Position</label>
-                  <select
-                    value={formData.job_position_id}
-                    onChange={(e) => setFormData({ ...formData, job_position_id: e.target.value })}
-                    className="input-field"
-                  >
-                    <option value="">Select Position</option>
-                    {jobPositions.map((p) => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100">
-                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Indian Bank Account Details</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Bank (e.g. HDFC)"
-                    value={formData.bank_name}
-                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                    className="input-field text-xs"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Account Number"
-                    value={formData.bank_account_no}
-                    onChange={(e) => setFormData({ ...formData, bank_account_no: e.target.value })}
-                    className="input-field text-xs font-mono"
-                  />
-                  <input
-                    type="text"
-                    placeholder="IFSC Code"
-                    value={formData.ifsc_swift}
-                    onChange={(e) => setFormData({ ...formData, ifsc_swift: e.target.value })}
-                    className="input-field text-xs font-mono uppercase"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="btn-secondary text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary text-xs font-semibold"
-                >
-                  Save Employee
-                </button>
-              </div>
-            </form>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setDeletingEmpId(null)}
+                className="btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="btn-danger text-xs font-semibold"
+              >
+                {isDeleting ? 'Offboarding...' : 'Confirm Offboard & Expire Contracts'}
+              </button>
+            </div>
           </div>
         </div>
       )}

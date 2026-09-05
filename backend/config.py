@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours for demo sessions
 
-    # Database
-    DATABASE_URL: str = "sqlite:///./peoplepay360.db"
+    # Database (PostgreSQL default, overrides with env var DATABASE_URL if set)
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/peoplepay360"
 
     # SMTP (optional — falls back to outbox if not configured)
     SMTP_HOST: str = ""

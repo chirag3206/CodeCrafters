@@ -110,7 +110,7 @@ def seed():
         db.flush()
 
         # ─── 4. Salary Structures & Sequenced Rules ───────────────────────
-        print("💰 Seeding salary structures & 10 mathematical rules…")
+        print("💰 Seeding salary structures & mathematical rules…")
         std_structure = SalaryStructure(
             name="Standard Regular Salary Structure",
             code="STANDARD_REGULAR",
@@ -133,7 +133,6 @@ def seed():
             ("Net Salary",                "NET_SALARY",                 RuleCategory.NET,       100, ComputationType.FORMULA,    0,    None,    0,    "rules['GROSS_AFTER_LOP'] - rules['TOTAL_STATUTORY_DEDUCTIONS']"),
         ]
 
-        created_rules = []
         for (name, code, cat, seq, comp, fixed, pct_base, pct_val, formula) in rules_data:
             r = SalaryRule(
                 structure_id=std_structure.id,
@@ -143,7 +142,105 @@ def seed():
                 formula_expression=formula, is_active=True,
             )
             db.add(r)
-            created_rules.append(r)
+        db.flush()
+
+        # Differentiated structure definitions
+        extra_structures = [
+            {
+                'name': 'Executive & Leadership Structure',
+                'code': 'EXECUTIVE_LEADERSHIP',
+                'rules': [
+                    ('Basic Salary', 'BASIC', RuleCategory.BASIC, 10, ComputationType.FORMULA, 0, None, 0, 'contract.wage'),
+                    ('Metro HRA (50%)', 'HRA', RuleCategory.ALLOWANCE, 20, ComputationType.PERCENTAGE, 0, 'BASIC', 50.0, None),
+                    ('Executive Special Allowance', 'SPECIAL_ALLOWANCE', RuleCategory.ALLOWANCE, 25, ComputationType.PERCENTAGE, 0, 'BASIC', 25.0, None),
+                    ('Executive Conveyance Allowance', 'CONVEYANCE', RuleCategory.ALLOWANCE, 30, ComputationType.FIXED, 5000.0, None, 0, None),
+                    ('Executive Medical Allowance', 'MEDICAL', RuleCategory.ALLOWANCE, 35, ComputationType.FIXED, 2500.0, None, 0, None),
+                    ('Gross Before LOP', 'GROSS_BEFORE_LOP', RuleCategory.GROSS, 40, ComputationType.FORMULA, 0, None, 0, "rules['BASIC'] + rules['HRA'] + rules['SPECIAL_ALLOWANCE'] + rules['CONVEYANCE'] + rules['MEDICAL']"),
+                    ('Loss of Pay Deduction', 'LOP_DEDUCTION', RuleCategory.DEDUCTION, 50, ComputationType.FORMULA, 0, None, 0, "(rules['BASIC'] / total_working_days) * unpaid_leave_days"),
+                    ('Gross After LOP', 'GROSS_AFTER_LOP', RuleCategory.GROSS, 60, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_BEFORE_LOP'] - rules['LOP_DEDUCTION']"),
+                    ('Provident Fund (PF)', 'PF_DEDUCTION', RuleCategory.DEDUCTION, 70, ComputationType.PERCENTAGE, 0, 'BASIC', 12.0, None),
+                    ('Income Tax / TDS (15%)', 'TAX_DEDUCTION', RuleCategory.DEDUCTION, 80, ComputationType.PERCENTAGE, 0, 'GROSS_AFTER_LOP', 15.0, None),
+                    ('Total Statutory Deductions', 'TOTAL_STATUTORY_DEDUCTIONS', RuleCategory.DEDUCTION, 90, ComputationType.FORMULA, 0, None, 0, "rules['PF_DEDUCTION'] + rules['TAX_DEDUCTION']"),
+                    ('Net Salary', 'NET_SALARY', RuleCategory.NET, 100, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_AFTER_LOP'] - rules['TOTAL_STATUTORY_DEDUCTIONS']"),
+                ]
+            },
+            {
+                'name': 'Tech Specialist & Engineering Structure',
+                'code': 'TECH_SPECIALIST',
+                'rules': [
+                    ('Basic Salary', 'BASIC', RuleCategory.BASIC, 10, ComputationType.FORMULA, 0, None, 0, 'contract.wage'),
+                    ('House Rent Allowance (40%)', 'HRA', RuleCategory.ALLOWANCE, 20, ComputationType.PERCENTAGE, 0, 'BASIC', 40.0, None),
+                    ('Tech & Internet Allowance', 'TECH_ALLOWANCE', RuleCategory.ALLOWANCE, 25, ComputationType.FIXED, 4000.0, None, 0, None),
+                    ('Learning & Development Stipend', 'LND_ALLOWANCE', RuleCategory.ALLOWANCE, 28, ComputationType.FIXED, 3000.0, None, 0, None),
+                    ('Conveyance Allowance', 'CONVEYANCE', RuleCategory.ALLOWANCE, 30, ComputationType.FIXED, 2000.0, None, 0, None),
+                    ('Gross Before LOP', 'GROSS_BEFORE_LOP', RuleCategory.GROSS, 40, ComputationType.FORMULA, 0, None, 0, "rules['BASIC'] + rules['HRA'] + rules['TECH_ALLOWANCE'] + rules['LND_ALLOWANCE'] + rules['CONVEYANCE']"),
+                    ('Loss of Pay Deduction', 'LOP_DEDUCTION', RuleCategory.DEDUCTION, 50, ComputationType.FORMULA, 0, None, 0, "(rules['BASIC'] / total_working_days) * unpaid_leave_days"),
+                    ('Gross After LOP', 'GROSS_AFTER_LOP', RuleCategory.GROSS, 60, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_BEFORE_LOP'] - rules['LOP_DEDUCTION']"),
+                    ('Provident Fund (PF)', 'PF_DEDUCTION', RuleCategory.DEDUCTION, 70, ComputationType.PERCENTAGE, 0, 'BASIC', 12.0, None),
+                    ('Income Tax / TDS (10%)', 'TAX_DEDUCTION', RuleCategory.DEDUCTION, 80, ComputationType.PERCENTAGE, 0, 'GROSS_AFTER_LOP', 10.0, None),
+                    ('Total Statutory Deductions', 'TOTAL_STATUTORY_DEDUCTIONS', RuleCategory.DEDUCTION, 90, ComputationType.FORMULA, 0, None, 0, "rules['PF_DEDUCTION'] + rules['TAX_DEDUCTION']"),
+                    ('Net Salary', 'NET_SALARY', RuleCategory.NET, 100, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_AFTER_LOP'] - rules['TOTAL_STATUTORY_DEDUCTIONS']"),
+                ]
+            },
+            {
+                'name': 'Sales & Field Operations Structure',
+                'code': 'SALES_FIELD',
+                'rules': [
+                    ('Basic Salary', 'BASIC', RuleCategory.BASIC, 10, ComputationType.FORMULA, 0, None, 0, 'contract.wage'),
+                    ('House Rent Allowance (40%)', 'HRA', RuleCategory.ALLOWANCE, 20, ComputationType.PERCENTAGE, 0, 'BASIC', 40.0, None),
+                    ('Field Travel & Daily Allowance', 'TRAVEL_ALLOWANCE', RuleCategory.ALLOWANCE, 25, ComputationType.FIXED, 5000.0, None, 0, None),
+                    ('Performance Incentive (15%)', 'PERFORMANCE_INCENTIVE', RuleCategory.ALLOWANCE, 30, ComputationType.PERCENTAGE, 0, 'BASIC', 15.0, None),
+                    ('Gross Before LOP', 'GROSS_BEFORE_LOP', RuleCategory.GROSS, 40, ComputationType.FORMULA, 0, None, 0, "rules['BASIC'] + rules['HRA'] + rules['TRAVEL_ALLOWANCE'] + rules['PERFORMANCE_INCENTIVE']"),
+                    ('Loss of Pay Deduction', 'LOP_DEDUCTION', RuleCategory.DEDUCTION, 50, ComputationType.FORMULA, 0, None, 0, "(rules['BASIC'] / total_working_days) * unpaid_leave_days"),
+                    ('Gross After LOP', 'GROSS_AFTER_LOP', RuleCategory.GROSS, 60, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_BEFORE_LOP'] - rules['LOP_DEDUCTION']"),
+                    ('Provident Fund (PF)', 'PF_DEDUCTION', RuleCategory.DEDUCTION, 70, ComputationType.PERCENTAGE, 0, 'BASIC', 12.0, None),
+                    ('Income Tax / TDS (10%)', 'TAX_DEDUCTION', RuleCategory.DEDUCTION, 80, ComputationType.PERCENTAGE, 0, 'GROSS_AFTER_LOP', 10.0, None),
+                    ('Total Statutory Deductions', 'TOTAL_STATUTORY_DEDUCTIONS', RuleCategory.DEDUCTION, 90, ComputationType.FORMULA, 0, None, 0, "rules['PF_DEDUCTION'] + rules['TAX_DEDUCTION']"),
+                    ('Net Salary', 'NET_SALARY', RuleCategory.NET, 100, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_AFTER_LOP'] - rules['TOTAL_STATUTORY_DEDUCTIONS']"),
+                ]
+            },
+            {
+                'name': 'Internship Fixed Stipend Structure',
+                'code': 'INTERN_STIPEND',
+                'rules': [
+                    ('Fixed Monthly Stipend', 'BASIC', RuleCategory.BASIC, 10, ComputationType.FORMULA, 0, None, 0, 'contract.wage'),
+                    ('Gross Before LOP', 'GROSS_BEFORE_LOP', RuleCategory.GROSS, 40, ComputationType.FORMULA, 0, None, 0, "rules['BASIC']"),
+                    ('Loss of Pay Deduction', 'LOP_DEDUCTION', RuleCategory.DEDUCTION, 50, ComputationType.FORMULA, 0, None, 0, "(rules['BASIC'] / total_working_days) * unpaid_leave_days"),
+                    ('Gross After LOP', 'GROSS_AFTER_LOP', RuleCategory.GROSS, 60, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_BEFORE_LOP'] - rules['LOP_DEDUCTION']"),
+                    ('Total Statutory Deductions', 'TOTAL_STATUTORY_DEDUCTIONS', RuleCategory.DEDUCTION, 90, ComputationType.FIXED, 0.0, None, 0, None),
+                    ('Net Salary', 'NET_SALARY', RuleCategory.NET, 100, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_AFTER_LOP'] - rules['TOTAL_STATUTORY_DEDUCTIONS']"),
+                ]
+            },
+            {
+                'name': 'Contractor & Consultant Structure (10% TDS)',
+                'code': 'CONTRACTOR_TDS',
+                'rules': [
+                    ('Professional Retainer Fee', 'BASIC', RuleCategory.BASIC, 10, ComputationType.FORMULA, 0, None, 0, 'contract.wage'),
+                    ('Gross Before LOP', 'GROSS_BEFORE_LOP', RuleCategory.GROSS, 40, ComputationType.FORMULA, 0, None, 0, "rules['BASIC']"),
+                    ('Loss of Pay Deduction', 'LOP_DEDUCTION', RuleCategory.DEDUCTION, 50, ComputationType.FORMULA, 0, None, 0, "(rules['BASIC'] / total_working_days) * unpaid_leave_days"),
+                    ('Gross After LOP', 'GROSS_AFTER_LOP', RuleCategory.GROSS, 60, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_BEFORE_LOP'] - rules['LOP_DEDUCTION']"),
+                    ('TDS Section 194J (10%)', 'TAX_DEDUCTION', RuleCategory.DEDUCTION, 80, ComputationType.PERCENTAGE, 0, 'GROSS_AFTER_LOP', 10.0, None),
+                    ('Total Statutory Deductions', 'TOTAL_STATUTORY_DEDUCTIONS', RuleCategory.DEDUCTION, 90, ComputationType.FORMULA, 0, None, 0, "rules['TAX_DEDUCTION']"),
+                    ('Net Salary', 'NET_SALARY', RuleCategory.NET, 100, ComputationType.FORMULA, 0, None, 0, "rules['GROSS_AFTER_LOP'] - rules['TOTAL_STATUTORY_DEDUCTIONS']"),
+                ]
+            }
+        ]
+
+        all_structures_map = {"STANDARD_REGULAR": std_structure}
+        for s_data in extra_structures:
+            st = SalaryStructure(name=s_data['name'], code=s_data['code'], is_active=True)
+            db.add(st)
+            db.flush()
+            for r_name, r_code, r_cat, r_seq, r_comp, r_fix, r_pbase, r_pval, r_formula in s_data['rules']:
+                rule = SalaryRule(
+                    structure_id=st.id,
+                    name=r_name, code=r_code, category=r_cat, sequence=r_seq,
+                    computation_type=r_comp, fixed_amount=r_fix,
+                    percentage_base_code=r_pbase, percentage_value=r_pval,
+                    formula_expression=r_formula, is_active=True
+                )
+                db.add(rule)
+            all_structures_map[s_data['code']] = st
         db.flush()
 
         # ─── 5. Users & Employees (Realistic Indian Corporate Salaries) ──
@@ -218,14 +315,33 @@ def seed():
         # ─── 6. Contracts ─────────────────────────────────────────────────
         print("📄 Seeding contracts…")
         created_contracts = []
+        # Mapping index to differentiated structure code
+        emp_struct_codes = [
+            "TECH_SPECIALIST",      # Aarav (Eng)
+            "STANDARD_REGULAR",    # Priya (HR)
+            "STANDARD_REGULAR",    # Rajesh (HR)
+            "EXECUTIVE_LEADERSHIP",# Sunita (Leadership)
+            "EXECUTIVE_LEADERSHIP",# Amit (Admin / Ops)
+            "SALES_FIELD",         # Kabir (Ops)
+            "TECH_SPECIALIST",     # Ananya (Eng)
+            "TECH_SPECIALIST",     # Rahul (Eng)
+            "CONTRACTOR_TDS",      # Divya (QA Contractor)
+            "SALES_FIELD",         # Rohan (Analyst)
+            "INTERN_STIPEND",      # Ritu (HR Intern)
+            "EXECUTIVE_LEADERSHIP",# Sameer (Product Lead)
+        ]
+
         for i, emp in enumerate(created_employees):
             wage = emp_data[i][7]
+            s_code = emp_struct_codes[i] if i < len(emp_struct_codes) else "STANDARD_REGULAR"
+            struct_to_use = all_structures_map.get(s_code, std_structure)
+
             # Historical contract (expired)
             if i < 5:
                 db.add(Contract(
                     reference=f"CNT-2024-{emp.first_name.upper()}-00",
                     employee_id=emp.id,
-                    salary_structure_id=std_structure.id,
+                    salary_structure_id=struct_to_use.id,
                     working_schedule_id=std_schedule.id,
                     wage=wage * 0.85,
                     start_date=date(2024, 1, 15),
@@ -237,7 +353,7 @@ def seed():
             c = Contract(
                 reference=f"CNT-2026-{emp.first_name.upper()}-01",
                 employee_id=emp.id,
-                salary_structure_id=std_structure.id,
+                salary_structure_id=struct_to_use.id,
                 working_schedule_id=std_schedule.id,
                 wage=wage,
                 start_date=date(2026, 1, 1),

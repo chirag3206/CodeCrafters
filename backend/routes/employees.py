@@ -1,6 +1,7 @@
 """
 PeoplePay360 — Employee Management Routes
 """
+from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
@@ -10,12 +11,12 @@ import random
 from database import get_db
 from dependencies import get_current_user, require_hr_manager, require_payroll_manager
 from models import (
-    Employee, Department, JobPosition, WorkingSchedule, Contract,
+    Employee, Department, JobPosition, WorkingSchedule, Contract, ContractStatus,
     Attendance, TimeOffRequest, TimeOffAllocation, Payslip,
     EmployeeStatus, EmploymentType, UserRole
 )
 from schemas import (
-    EmployeeCreate, EmployeeOut, EmployeeUpdate, SmartButtonCounts,
+    EmployeeCreate, EmployeeOut, EmployeeUpdate, EmployeeOffboardRequest, SmartButtonCounts,
     DepartmentOut, JobPositionOut, WorkingScheduleOut, MessageResponse
 )
 
@@ -95,7 +96,8 @@ def list_employees(
             or_(
                 Employee.first_name.ilike(search_pattern),
                 Employee.last_name.ilike(search_pattern),
-                Employee.work_email.ilike(search_pattern)
+                Employee.work_email.ilike(search_pattern),
+                Employee.badge_id.ilike(search_pattern),
             )
         )
 
@@ -158,17 +160,26 @@ def create_employee(
     avatar_initials = f"{data.first_name[0].upper()}{data.last_name[0].upper()}"
     avatar_color = AVATAR_COLORS[len(full_name) % len(AVATAR_COLORS)]
 
-    # Auto-generate badge_id: find the max existing employee id and increment
-    max_id = db.query(Employee).count()
-    badge_id = f"EMP-{max_id + 1:03d}"
+    # Determine badge_id: use supplied badge_id or auto-generate
+    custom_badge = (data.badge_id or "").strip()
+    if custom_badge:
+        import re
+        # Normalize: strip spaces like 'EMP - 014' -> 'EMP-014', ensure 'EMP-' prefix
+        cleaned = re.sub(r"^EMP\s*-\s*", "", custom_badge, flags=re.IGNORECASE).strip()
+        badge_id = f"EMP-{cleaned.upper()}"
+        existing_badge = db.query(Employee).filter(Employee.badge_id == badge_id).first()
+        if existing_badge:
+            raise HTTPException(status_code=400, detail=f"Employee ID '{badge_id}' is already in use.")
+    else:
+        max_id = db.query(Employee).count()
+        badge_id = f"EMP-{max_id + 1:03d}"
 
     emp_data = data.model_dump()
-    emp = Employee(
-        **emp_data,
-        badge_id=badge_id,
-        avatar_initials=avatar_initials,
-        avatar_color=avatar_color,
-    )
+    emp_data["badge_id"] = badge_id
+    emp_data["avatar_initials"] = avatar_initials
+    emp_data["avatar_color"] = avatar_color
+
+    emp = Employee(**emp_data)
     db.add(emp)
     db.commit()
     db.refresh(emp)
@@ -207,23 +218,79 @@ def update_employee(
     return emp_out
 
 
+def _execute_employee_offboard(emp: Employee, reason: str, notes: Optional[str], db: Session) -> MessageResponse:
+    reason_clean = (reason or "").strip()
+    reason_lower = reason_clean.lower()
+
+    if "retire" in reason_lower:
+        new_status = EmployeeStatus.RETIRED
+    elif "terminate" in reason_lower:
+        new_status = EmployeeStatus.TERMINATED
+    elif "left" in reason_lower:
+        new_status = EmployeeStatus.LEFT_JOB
+    elif "resign" in reason_lower:
+        new_status = EmployeeStatus.RESIGNED
+    else:
+        new_status = EmployeeStatus.INACTIVE
+
+    emp.status = new_status
+    emp.departure_reason = reason_clean
+    emp.departure_date = date.today()
+    if notes:
+        emp.departure_notes = notes
+
+    # Deactivate linked user login if present
+    if emp.user:
+        emp.user.is_active = False
+
+    # Automatically transition all active and draft contracts to Expired
+    active_contracts = db.query(Contract).filter(
+        Contract.employee_id == emp.id,
+        Contract.status.in_([ContractStatus.ACTIVE, ContractStatus.DRAFT])
+    ).all()
+
+    for cnt in active_contracts:
+        cnt.status = ContractStatus.EXPIRED
+        if not cnt.end_date or cnt.end_date > date.today():
+            cnt.end_date = date.today()
+
+    db.commit()
+    return MessageResponse(
+        message=f"Employee {emp.first_name} {emp.last_name} offboarded as '{new_status.value}'. {len(active_contracts)} contract(s) automatically transitioned to Expired.",
+        success=True
+    )
+
+
 @router.delete(
     "/employees/{employee_id}",
     response_model=MessageResponse,
     dependencies=[Depends(require_hr_manager)]
 )
-def archive_employee(
+def delete_employee(
     employee_id: int,
+    reason: Optional[str] = Query("Terminated", description="Offboarding reason: Retired, Terminated, Left Job, Resigned, Contract Ended"),
+    notes: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    # Archive = set to Inactive (no TERMINATED enum value)
-    emp.status = EmployeeStatus.INACTIVE
-    db.commit()
-    return MessageResponse(
-        message=f"Employee {emp.first_name} {emp.last_name} has been archived (set to Inactive)",
-        success=True
-    )
+    return _execute_employee_offboard(emp, reason or "Terminated", notes, db)
+
+
+@router.post(
+    "/employees/{employee_id}/offboard",
+    response_model=MessageResponse,
+    dependencies=[Depends(require_hr_manager)]
+)
+def offboard_employee(
+    employee_id: int,
+    data: EmployeeOffboardRequest,
+    db: Session = Depends(get_db)
+):
+    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    return _execute_employee_offboard(emp, data.reason, data.notes, db)

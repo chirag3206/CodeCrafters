@@ -53,7 +53,7 @@ def list_payruns(db: Session = Depends(get_db)):
 def get_eligible_candidates(
     period_start: date = Query(...),
     period_end: date = Query(...),
-    salary_structure_id: int = Query(...),
+    salary_structure_id: Optional[int] = Query(None),
     department_id: Optional[int] = None,
     employee_type: Optional[str] = None,
     db: Session = Depends(get_db)
@@ -103,6 +103,7 @@ def get_eligible_candidates(
             job_position=emp.job_position.title if emp.job_position else None,
             contract_reference=contract.reference if contract else None,
             contract_wage=contract.wage if contract else None,
+            contract_structure_name=contract.salary_structure.name if contract and contract.salary_structure else None,
             has_valid_contract=bool(contract),
             has_bank_details=bool(emp.bank_account_no and emp.ifsc_swift),
             has_duplicate_payslip=bool(dup_slip),
@@ -124,11 +125,10 @@ def get_payrun(payrun_id: int, db: Session = Depends(get_db)):
 # ─── HELPER: INTERNAL COMPUTE PAYRUN ────────────────────────────────────────
 
 def _execute_compute_payrun(payrun: Payrun, db: Session) -> Payrun:
-    structure = payrun.salary_structure
-    if not structure:
-        structure = db.query(SalaryStructure).first()
+    default_structure = payrun.salary_structure
+    if not default_structure:
+        default_structure = db.query(SalaryStructure).first()
 
-    rules = structure.rules if structure else []
     total_days = _count_business_days(payrun.period_start, payrun.period_end)
 
     total_gross = 0.0
@@ -136,14 +136,23 @@ def _execute_compute_payrun(payrun: Payrun, db: Session) -> Payrun:
     total_net = 0.0
 
     for slip in payrun.payslips:
+        # Clear old lines for recalculation
+        db.query(PayslipLine).filter(PayslipLine.payslip_id == slip.id).delete()
+
         contract = slip.contract
+        if not contract and slip.contract_id:
+            contract = db.query(Contract).filter(Contract.id == slip.contract_id).first()
+            slip.contract = contract
         if not contract:
             contract = db.query(Contract).filter(
                 Contract.employee_id == slip.employee_id,
                 Contract.start_date <= payrun.period_end,
-                or_(Contract.end_date >= payrun.period_start, Contract.end_date.is_(None))
+                or_(Contract.end_date >= payrun.period_start, Contract.end_date.is_(None)),
+                Contract.status.in_([ContractStatus.ACTIVE, ContractStatus.EXPIRED])
             ).order_by(Contract.start_date.desc()).first()
             slip.contract = contract
+        if contract and not slip.contract_id:
+            slip.contract_id = contract.id
 
         # Attendance worked days
         attendances = db.query(Attendance).filter(
@@ -177,10 +186,13 @@ def _execute_compute_payrun(payrun: Payrun, db: Session) -> Payrun:
         slip.unpaid_leave_days = float(unpaid_leaves)
         slip.overtime_hours = float(overtime_hours)
 
-        # Clear old lines
-        db.query(PayslipLine).filter(PayslipLine.payslip_id == slip.id).delete()
+        # Resolve contract-specific salary structure rules:
+        # Each employee is computed using their own contract's structure rules.
+        # Fall back to the payrun's batch structure or the first available structure if contract has none.
+        contract_structure = (contract.salary_structure if contract and contract.salary_structure else None) or payrun.salary_structure or default_structure
+        contract_rules = contract_structure.rules if contract_structure else []
 
-        # Sequenced calculation
+        # Sequenced calculation using the employee's contract rules
         gross, deduct, net, lines = compute_payslip(
             contract=contract,
             worked_days=worked_days,
@@ -188,7 +200,7 @@ def _execute_compute_payrun(payrun: Payrun, db: Session) -> Payrun:
             unpaid_leave_days=unpaid_leaves,
             paid_leave_days=paid_leaves,
             overtime_hours=overtime_hours,
-            rules_list=rules,
+            rules_list=contract_rules,
         )
 
         slip.gross_pay = gross
@@ -368,6 +380,10 @@ def mark_payrun_paid(payrun_id: int, db: Session = Depends(get_db)):
 
     for slip in payrun.payslips:
         slip.status = PayslipStatus.PAID
+        # Auto-confirm pre-review status for non-disputed payslips when marking paid.
+        # Disputed slips are left as-is so HR can still see and resolve them.
+        if slip.verification_status != VerificationStatus.DISPUTED:
+            slip.verification_status = VerificationStatus.CONFIRMED
         # Generate printable PDF
         pdf_path = generate_payslip_pdf(slip)
         slip.pdf_path = pdf_path

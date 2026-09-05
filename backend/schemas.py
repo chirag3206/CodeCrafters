@@ -148,6 +148,14 @@ class EmployeeUpdate(BaseModel):
     bank_name: Optional[str] = None
     bank_account_no: Optional[str] = None
     ifsc_swift: Optional[str] = None
+    departure_reason: Optional[str] = None
+    departure_date: Optional[date] = None
+    departure_notes: Optional[str] = None
+
+
+class EmployeeOffboardRequest(BaseModel):
+    reason: str  # "Retired", "Terminated", "Left Job", "Resigned", "Contract Ended"
+    notes: Optional[str] = None
 
 
 class SmartButtonCounts(BaseModel):
@@ -163,6 +171,9 @@ class EmployeeOut(EmployeeBase):
     full_name: str
     avatar_initials: Optional[str] = None
     avatar_color: Optional[str] = None
+    departure_reason: Optional[str] = None
+    departure_date: Optional[date] = None
+    departure_notes: Optional[str] = None
     created_at: datetime
     department: Optional[DepartmentOut] = None
     job_position: Optional[JobPositionOut] = None
@@ -178,10 +189,15 @@ class EmployeeOut(EmployeeBase):
 
 class ContractBase(BaseModel):
     reference: str
+    name: Optional[str] = None
     employee_id: int
+    contract_type: Optional[str] = "Permanent"
+    department_id: Optional[int] = None
+    job_position_id: Optional[int] = None
     salary_structure_id: Optional[int] = None
     working_schedule_id: Optional[int] = None
     wage: float
+    payment_frequency: Optional[str] = "Monthly"
     start_date: date
     end_date: Optional[date] = None
     notes: Optional[str] = None
@@ -192,7 +208,12 @@ class ContractCreate(ContractBase):
 
 
 class ContractUpdate(BaseModel):
+    name: Optional[str] = None
+    contract_type: Optional[str] = None
+    department_id: Optional[int] = None
+    job_position_id: Optional[int] = None
     wage: Optional[float] = None
+    payment_frequency: Optional[str] = None
     end_date: Optional[date] = None
     status: Optional[ContractStatus] = None
     notes: Optional[str] = None
@@ -205,6 +226,8 @@ class ContractOut(ContractBase):
     status: ContractStatus
     created_at: datetime
     employee: Optional[EmployeeOut] = None
+    department: Optional[DepartmentOut] = None
+    job_position: Optional[JobPositionOut] = None
     salary_structure: Optional["SalaryStructureOut"] = None
     working_schedule: Optional[WorkingScheduleOut] = None
 
@@ -372,6 +395,7 @@ class PayrunCandidateOut(BaseModel):
     job_position: Optional[str] = None
     contract_reference: Optional[str] = None
     contract_wage: Optional[float] = None
+    contract_structure_name: Optional[str] = None
     has_valid_contract: bool
     has_bank_details: bool
     has_duplicate_payslip: bool
@@ -446,6 +470,7 @@ class PayslipOut(BaseModel):
     pdf_path: Optional[str] = None
     created_at: datetime
     employee: Optional[EmployeeOut] = None
+    contract: Optional[ContractOut] = None
     lines: List[PayslipLineOut] = []
     payrun: Optional[PayrunOut] = None
 

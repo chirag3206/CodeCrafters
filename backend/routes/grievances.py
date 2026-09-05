@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from dependencies import get_current_user, require_payroll_user, require_hr_manager
 from models import (
-    Payslip, PayslipStatus, VerificationStatus, Payrun, PayrunStatus,
-    Attendance, TimeOffRequest, UserRole, PrePayrollVerification, Employee
+    Payslip, PayslipLine, PayslipStatus, VerificationStatus, Payrun, PayrunStatus,
+    Attendance, TimeOffRequest, UserRole, PrePayrollVerification, Employee, Contract
 )
 from schemas import (
     PrePayrollStatementOut, GrievanceSubmitRequest, GrievanceResolveRequest,
@@ -268,10 +268,24 @@ def resolve_grievance(
             slip.unpaid_leave_days = max(0.0, slip.unpaid_leave_days - 1.0)
             slip.worked_days += 1.0
 
-        # Auto-recalculate draft payslip
-        rules = slip.payrun.salary_structure.rules if (slip.payrun and slip.payrun.salary_structure) else []
+        # Auto-recalculate draft payslip using the individual employee's contract
+        contract = slip.contract
+        if not contract and slip.contract_id:
+            contract = db.query(Contract).filter(Contract.id == slip.contract_id).first()
+            slip.contract = contract
+        if not contract:
+            contract = db.query(Contract).filter(
+                Contract.employee_id == slip.employee_id,
+                Contract.start_date <= slip.period_end,
+                or_(Contract.end_date >= slip.period_start, Contract.end_date.is_(None))
+            ).order_by(Contract.start_date.desc()).first()
+            slip.contract = contract
+
+        contract_structure = (contract.salary_structure if contract and contract.salary_structure else None) or (slip.payrun.salary_structure if slip.payrun else None)
+        rules = contract_structure.rules if contract_structure else []
+
         gross, deduct, net, lines = compute_payslip(
-            contract=slip.contract,
+            contract=contract,
             worked_days=slip.worked_days,
             total_working_days=slip.scheduled_days,
             unpaid_leave_days=slip.unpaid_leave_days,
@@ -282,6 +296,19 @@ def resolve_grievance(
         slip.gross_pay = gross
         slip.total_deductions = deduct
         slip.net_pay = net
+
+        # Re-populate payslip lines
+        db.query(PayslipLine).filter(PayslipLine.payslip_id == slip.id).delete()
+        for line in lines:
+            db.add(PayslipLine(
+                payslip_id=slip.id,
+                rule_id=line["rule_id"],
+                rule_name=line["rule_name"],
+                rule_code=line["rule_code"],
+                category=line["category"],
+                sequence=line["sequence"],
+                amount=line["amount"],
+            ))
 
         if pv:
             pv.status = VerificationStatus.PENDING

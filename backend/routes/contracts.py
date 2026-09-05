@@ -8,7 +8,7 @@ from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
 
 from database import get_db
-from dependencies import get_current_user, require_hr_manager
+from dependencies import get_current_user, require_hr_manager, require_payroll_manager
 from models import Contract, ContractStatus, Employee, SalaryStructure, WorkingSchedule, UserRole
 from schemas import ContractCreate, ContractOut, ContractUpdate, MessageResponse
 
@@ -17,7 +17,10 @@ router = APIRouter(prefix="/api/contracts", tags=["Contracts"])
 
 @router.get("", response_model=List[ContractOut])
 def list_contracts(
+    q: Optional[str] = None,
     employee_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    salary_structure_id: Optional[int] = None,
     status_filter: Optional[ContractStatus] = Query(None, alias="status"),
     skip: int = 0,
     limit: int = 100,
@@ -37,6 +40,30 @@ def list_contracts(
 
     if status_filter:
         query = query.filter(Contract.status == status_filter)
+
+    if salary_structure_id:
+        query = query.filter(Contract.salary_structure_id == salary_structure_id)
+
+    if department_id:
+        query = query.filter(
+            or_(
+                Contract.department_id == department_id,
+                Contract.employee.has(Employee.department_id == department_id)
+            )
+        )
+
+    if q:
+        pattern = f"%{q}%"
+        query = query.outerjoin(Employee, Contract.employee_id == Employee.id).filter(
+            or_(
+                Contract.reference.ilike(pattern),
+                Contract.name.ilike(pattern),
+                Employee.first_name.ilike(pattern),
+                Employee.last_name.ilike(pattern),
+                Employee.badge_id.ilike(pattern),
+                Employee.work_email.ilike(pattern),
+            )
+        )
 
     contracts = query.order_by(Contract.start_date.desc()).offset(skip).limit(limit).all()
     return contracts
@@ -87,10 +114,15 @@ def create_contract(
 
     contract = Contract(
         reference=data.reference,
+        name=data.name or f"Contract - {data.reference}",
         employee_id=data.employee_id,
+        contract_type=data.contract_type or "Permanent",
+        department_id=data.department_id,
+        job_position_id=data.job_position_id,
         salary_structure_id=data.salary_structure_id,
         working_schedule_id=data.working_schedule_id,
         wage=data.wage,
+        payment_frequency=data.payment_frequency or "Monthly",
         start_date=data.start_date,
         end_date=data.end_date,
         status=ContractStatus.ACTIVE,
@@ -102,7 +134,7 @@ def create_contract(
     return contract
 
 
-@router.put("/{contract_id}", response_model=ContractOut, dependencies=[Depends(require_hr_manager)])
+@router.put("/{contract_id}", response_model=ContractOut, dependencies=[Depends(require_payroll_manager)])
 def update_contract(
     contract_id: int,
     data: ContractUpdate,
@@ -121,7 +153,7 @@ def update_contract(
     return contract
 
 
-@router.delete("/{contract_id}", response_model=MessageResponse, dependencies=[Depends(require_hr_manager)])
+@router.delete("/{contract_id}", response_model=MessageResponse, dependencies=[Depends(require_payroll_manager)])
 def terminate_contract(
     contract_id: int,
     db: Session = Depends(get_db)

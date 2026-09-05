@@ -4,7 +4,7 @@ import { payrunsApi, salaryConfigApi, employeesApi } from '../services/api';
 import type { Payrun, SalaryStructure, Department } from '../types';
 import {
   DollarSign, Plus, Calendar, AlertTriangle, ChevronRight,
-  CheckCircle2, ArrowRight, X, ShieldAlert
+  CheckCircle2, ArrowRight, X, ShieldAlert, FileText
 } from 'lucide-react';
 
 interface Candidate {
@@ -15,6 +15,7 @@ interface Candidate {
   job_position: string | null;
   contract_reference: string | null;
   contract_wage: number | null;
+  contract_structure_name?: string | null;
   has_valid_contract: boolean;
   has_bank_details: boolean;
   has_duplicate_payslip: boolean;
@@ -336,7 +337,7 @@ export default function PayrollPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="field-label">Salary Structure *</label>
+                    <label className="field-label">Default Salary Structure (Fallback) *</label>
                     <select
                       required
                       value={step1Data.salary_structure_id}
@@ -347,6 +348,9 @@ export default function PayrollPage() {
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Individual contract structures take precedence; this is used as fallback.
+                    </p>
                   </div>
                   <div>
                     <label className="field-label">Department Scope</label>
@@ -455,10 +459,23 @@ export default function PayrollPage() {
                                   {c.verification_status || 'Pending'}
                                 </span>
                               </div>
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                Contract: <span className="font-mono text-indigo-700 font-semibold">{c.contract_reference || 'N/A'}</span>
-                                {c.contract_wage && ` (₹${c.contract_wage.toFixed(2)}/mo)`}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
+                                <span>
+                                  Contract: <span className="font-mono text-indigo-700 font-semibold">{c.contract_reference || 'N/A'}</span>
+                                  {c.contract_wage && ` (₹${c.contract_wage.toLocaleString('en-IN', { minimumFractionDigits: 2 })}/mo)`}
+                                </span>
+                                <span className="text-slate-300">|</span>
+                                <span className="flex items-center gap-1 font-medium text-slate-700">
+                                  <FileText size={12} className="text-indigo-500" />
+                                  {c.contract_structure_name ? (
+                                    <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-200 text-[10px] font-bold">
+                                      {c.contract_structure_name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 text-[10px]">Using Batch Default</span>
+                                  )}
+                                </span>
+                              </div>
 
                               {/* Warning Anomaly Pills */}
                               {c.warnings.length > 0 && (

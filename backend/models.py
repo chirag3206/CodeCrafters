@@ -33,12 +33,17 @@ class EmploymentType(str, enum.Enum):
     FULL_TIME = "Full-Time"
     PART_TIME = "Part-Time"
     CONTRACTOR = "Contractor"
+    INTERN = "Intern"
 
 
 class EmployeeStatus(str, enum.Enum):
     ACTIVE = "Active"
     INACTIVE = "Inactive"
     ON_LEAVE = "On Leave"
+    RETIRED = "Retired"
+    TERMINATED = "Terminated"
+    LEFT_JOB = "Left Job"
+    RESIGNED = "Resigned"
 
 
 class ContractStatus(str, enum.Enum):
@@ -237,6 +242,10 @@ class Employee(Base):
     # Avatar
     avatar_initials: Mapped[Optional[str]] = mapped_column(String(5))
     avatar_color: Mapped[Optional[str]] = mapped_column(String(10))
+    # Departure & Offboarding Tracking
+    departure_reason: Mapped[Optional[str]] = mapped_column(String(100))
+    departure_date: Mapped[Optional[date]] = mapped_column(Date)
+    departure_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
@@ -316,10 +325,15 @@ class Contract(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     reference: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(150))
     employee_id: Mapped[int] = mapped_column(Integer, ForeignKey("employees.id"), nullable=False)
+    contract_type: Mapped[Optional[str]] = mapped_column(String(50), default="Permanent")
+    department_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("departments.id"))
+    job_position_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("job_positions.id"))
     salary_structure_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("salary_structures.id"))
     working_schedule_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("working_schedules.id"))
     wage: Mapped[float] = mapped_column(Float, nullable=False)
+    payment_frequency: Mapped[Optional[str]] = mapped_column(String(20), default="Monthly")
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[Optional[date]] = mapped_column(Date)  # NULL = Indefinite
     status: Mapped[ContractStatus] = mapped_column(Enum(ContractStatus), default=ContractStatus.DRAFT)
@@ -328,6 +342,8 @@ class Contract(Base):
 
     # Relationships
     employee: Mapped["Employee"] = relationship("Employee", back_populates="contracts", foreign_keys=[employee_id])
+    department: Mapped[Optional["Department"]] = relationship("Department")
+    job_position: Mapped[Optional["JobPosition"]] = relationship("JobPosition")
     salary_structure: Mapped[Optional["SalaryStructure"]] = relationship("SalaryStructure", back_populates="contracts")
     working_schedule: Mapped[Optional["WorkingSchedule"]] = relationship("WorkingSchedule", back_populates="contracts")
     payslips: Mapped[List["Payslip"]] = relationship("Payslip", back_populates="contract")

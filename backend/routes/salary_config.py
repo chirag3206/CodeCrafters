@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from dependencies import get_current_user, require_payroll_user, require_payroll_manager
+from dependencies import get_current_user, require_payroll_user, require_payroll_manager, require_hr_or_payroll
 from models import SalaryStructure, SalaryRule, Contract
 from schemas import (
     SalaryStructureCreate, SalaryStructureOut,
@@ -43,7 +43,7 @@ class SalaryRuleUpdate(BaseModel):
 
 # ─── SALARY STRUCTURES ───────────────────────────────────────────────────────
 
-@router.get("/salary-structures", response_model=List[SalaryStructureOut], dependencies=[Depends(require_payroll_user)])
+@router.get("/salary-structures", response_model=List[SalaryStructureOut], dependencies=[Depends(require_hr_or_payroll)])
 def list_salary_structures(db: Session = Depends(get_db)):
     structures = db.query(SalaryStructure).all()
     result = []
@@ -55,7 +55,7 @@ def list_salary_structures(db: Session = Depends(get_db)):
     return result
 
 
-@router.get("/salary-structures/{structure_id}", response_model=SalaryStructureOut, dependencies=[Depends(require_payroll_user)])
+@router.get("/salary-structures/{structure_id}", response_model=SalaryStructureOut, dependencies=[Depends(require_hr_or_payroll)])
 def get_salary_structure(structure_id: int, db: Session = Depends(get_db)):
     s = db.query(SalaryStructure).filter(SalaryStructure.id == structure_id).first()
     if not s:
@@ -66,7 +66,7 @@ def get_salary_structure(structure_id: int, db: Session = Depends(get_db)):
     return s_out
 
 
-@router.post("/salary-structures", response_model=SalaryStructureOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_payroll_manager)])
+@router.post("/salary-structures", response_model=SalaryStructureOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_hr_or_payroll)])
 def create_salary_structure(data: SalaryStructureCreate, db: Session = Depends(get_db)):
     existing = db.query(SalaryStructure).filter(SalaryStructure.code == data.code).first()
     if existing:
@@ -108,12 +108,12 @@ def update_salary_structure(structure_id: int, data: SalaryStructureUpdate, db: 
 
 # ─── SALARY RULES ────────────────────────────────────────────────────────────
 
-@router.get("/salary-rules", response_model=List[SalaryRuleOut], dependencies=[Depends(require_payroll_user)])
+@router.get("/salary-rules", response_model=List[SalaryRuleOut], dependencies=[Depends(require_hr_or_payroll)])
 def list_salary_rules(structure_id: int = Query(...), db: Session = Depends(get_db)):
     return db.query(SalaryRule).filter(SalaryRule.structure_id == structure_id).order_by(SalaryRule.sequence).all()
 
 
-@router.post("/salary-rules", response_model=SalaryRuleOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_payroll_manager)])
+@router.post("/salary-rules", response_model=SalaryRuleOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_hr_or_payroll)])
 def create_salary_rule(data: SalaryRuleCreate, db: Session = Depends(get_db)):
     existing = db.query(SalaryRule).filter(
         SalaryRule.structure_id == data.structure_id,

@@ -48,6 +48,8 @@ export const employeesApi = {
   create: (data: any) => api.post('/employees', data),
   update: (id: number, data: any) => api.put(`/employees/${id}`, data),
   archive: (id: number) => api.delete(`/employees/${id}`),
+  offboard: (id: number, data: { reason: string; notes?: string }) =>
+    api.post(`/employees/${id}/offboard`, data),
   departments: () => api.get('/departments'),
   jobPositions: (dept_id?: number) => api.get('/job-positions', { params: { department_id: dept_id } }),
   workingSchedules: () => api.get('/working-schedules'),
@@ -55,7 +57,7 @@ export const employeesApi = {
 
 // ── Contracts ─────────────────────────────────────────────────────────────────
 export const contractsApi = {
-  list: (params?: { employee_id?: number; status?: string; skip?: number; limit?: number }) =>
+  list: (params?: { q?: string; employee_id?: number; department_id?: number; salary_structure_id?: number; status?: string; skip?: number; limit?: number }) =>
     api.get('/contracts', { params }),
   get: (id: number) => api.get(`/contracts/${id}`),
   create: (data: any) => api.post('/contracts', data),
@@ -163,7 +165,15 @@ export const payslipsApi = {
   list: (params?: { employee_id?: number; payrun_id?: number; status?: string; skip?: number; limit?: number }) =>
     api.get('/payslips', { params }),
   get: (id: number) => api.get(`/payslips/${id}`),
-  pdfUrl: (id: number) => `${API_BASE}/payslips/${id}/pdf`,
+  /** Returns a URL with token embedded so the browser can download directly without CORS/auth issues */
+  pdfUrl: (id: number) => {
+    const token = localStorage.getItem('access_token') ?? '';
+    return `${API_BASE}/payslips/${id}/pdf?token=${encodeURIComponent(token)}`;
+  },
+  csvUrl: (id: number) => {
+    const token = localStorage.getItem('access_token') ?? '';
+    return `${API_BASE}/payslips/${id}/csv?token=${encodeURIComponent(token)}`;
+  },
 };
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
