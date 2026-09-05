@@ -1,18 +1,21 @@
 """
 PeoplePay360 — Employee Management Routes
 """
+import re
+import secrets
+import string
 from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
-import random
 
+from auth import hash_password
 from database import get_db
 from dependencies import get_current_user, require_hr_manager, require_payroll_manager
 from models import (
     Employee, Department, JobPosition, WorkingSchedule, Contract, ContractStatus,
-    Attendance, TimeOffRequest, TimeOffAllocation, Payslip,
+    Attendance, TimeOffRequest, TimeOffAllocation, Payslip, SalaryStructure, User,
     EmployeeStatus, EmploymentType, UserRole
 )
 from schemas import (
@@ -115,6 +118,8 @@ def list_employees(
     result = []
     for emp in employees:
         emp_out = EmployeeOut.model_validate(emp)
+        emp_out.has_user_account = emp.user is not None
+        emp_out.user_id = emp.user.id if emp.user else None
         emp_out.smart_buttons = _get_smart_buttons(db, emp.id)
         result.append(emp_out)
 
@@ -138,8 +143,15 @@ def get_employee(
             raise HTTPException(status_code=403, detail="Access denied to this employee record")
 
     emp_out = EmployeeOut.model_validate(emp)
+    emp_out.has_user_account = emp.user is not None
+    emp_out.user_id = emp.user.id if emp.user else None
     emp_out.smart_buttons = _get_smart_buttons(db, emp.id)
     return emp_out
+
+
+def _generate_temp_password(length: int = 12) -> str:
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 @router.post(
@@ -156,6 +168,11 @@ def create_employee(
     if existing:
         raise HTTPException(status_code=400, detail="Employee with this email already exists")
 
+    # Check if work_email is already a user account
+    existing_user = db.query(User).filter(User.email == data.work_email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="A user account with this email already exists.")
+
     full_name = f"{data.first_name} {data.last_name}"
     avatar_initials = f"{data.first_name[0].upper()}{data.last_name[0].upper()}"
     avatar_color = AVATAR_COLORS[len(full_name) % len(AVATAR_COLORS)]
@@ -163,7 +180,6 @@ def create_employee(
     # Determine badge_id: use supplied badge_id or auto-generate
     custom_badge = (data.badge_id or "").strip()
     if custom_badge:
-        import re
         # Normalize: strip spaces like 'EMP - 014' -> 'EMP-014', ensure 'EMP-' prefix
         cleaned = re.sub(r"^EMP\s*-\s*", "", custom_badge, flags=re.IGNORECASE).strip()
         badge_id = f"EMP-{cleaned.upper()}"
@@ -174,19 +190,48 @@ def create_employee(
         max_id = db.query(Employee).count()
         badge_id = f"EMP-{max_id + 1:03d}"
 
-    emp_data = data.model_dump()
+    # Validate salary structure if provided
+    salary_structure_id = data.salary_structure_id
+    if salary_structure_id:
+        ss = db.query(SalaryStructure).filter(SalaryStructure.id == salary_structure_id).first()
+        if not ss:
+            raise HTTPException(status_code=400, detail="Salary structure not found.")
+
+    # Build employee dict — exclude our extra non-model fields
+    emp_data = data.model_dump(exclude={"initial_password", "salary_structure_id"})
     emp_data["badge_id"] = badge_id
     emp_data["avatar_initials"] = avatar_initials
     emp_data["avatar_color"] = avatar_color
 
     emp = Employee(**emp_data)
     db.add(emp)
+    db.flush()  # get emp.id without committing
+
+    # Auto-create a User login account for this employee
+    plain_password = data.initial_password or _generate_temp_password()
+    new_user = User(
+        email=data.work_email,
+        hashed_password=hash_password(plain_password),
+        role=UserRole.EMPLOYEE,
+        is_active=True,
+    )
+    db.add(new_user)
+    db.flush()  # get new_user.id
+
+    emp.user_id = new_user.id
+
     db.commit()
     db.refresh(emp)
 
     emp_out = EmployeeOut.model_validate(emp)
+    emp_out.has_user_account = True
+    emp_out.user_id = new_user.id
     emp_out.smart_buttons = _get_smart_buttons(db, emp.id)
-    return emp_out
+    # Stash the plain password on the object so the response can relay it ONCE
+    # (We add it as an extra field via model_extra — frontend reads it)
+    emp_out_dict = emp_out.model_dump()
+    emp_out_dict["temp_password"] = plain_password
+    return emp_out_dict
 
 
 @router.put(

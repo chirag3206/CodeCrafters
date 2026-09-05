@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Save, AlertCircle } from 'lucide-react';
-import { employeesApi } from '../services/api';
+import { X, UserPlus, Save, AlertCircle, KeyRound, Eye, EyeOff, Copy, CheckCircle2 } from 'lucide-react';
+import { employeesApi, salaryConfigApi } from '../services/api';
 
 interface Department {
   id: number;
@@ -29,6 +29,10 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
   const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
   const [schedules, setSchedules] = useState<WorkingSchedule[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
+  const [salaryStructures, setSalaryStructures] = useState<any[]>([]);
+  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [copiedPass, setCopiedPass] = useState(false);
+  const [showCreatedPass, setShowCreatedPass] = useState(false);
 
   const [formData, setFormData] = useState({
     badge_id: '',
@@ -47,7 +51,11 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
     bank_name: '',
     bank_account_no: '',
     ifsc_swift: '',
+    // New auth fields (create only)
+    initial_password: '',
+    salary_structure_id: '',
   });
+  const [showInitialPass, setShowInitialPass] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +87,14 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
     };
     loadRefs();
 
+    const loadSalaryStructures = async () => {
+      try {
+        const res = await salaryConfigApi.structures();
+        setSalaryStructures(res.data || []);
+      } catch { /* ignore */ }
+    };
+    loadSalaryStructures();
+
     if (employeeToEdit) {
       setFormData({
         badge_id: cleanBadge(employeeToEdit.badge_id),
@@ -97,6 +113,8 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
         bank_name: employeeToEdit.bank_name || '',
         bank_account_no: employeeToEdit.bank_account_no || '',
         ifsc_swift: employeeToEdit.ifsc_swift || '',
+        initial_password: '',
+        salary_structure_id: '',
       });
     } else {
       setFormData({
@@ -116,10 +134,66 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
         bank_name: '',
         bank_account_no: '',
         ifsc_swift: '',
+        initial_password: '',
+        salary_structure_id: '',
       });
     }
     setError(null);
+    setCreatedCredentials(null);
   }, [isOpen, employeeToEdit]);
+
+  // Credentials success modal
+  if (createdCredentials) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fade-in">
+        <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-5 text-white text-center">
+            <CheckCircle2 size={36} className="mx-auto mb-2" />
+            <h3 className="font-bold text-lg">Employee Created!</h3>
+            <p className="text-emerald-100 text-sm">Login credentials have been set up</p>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 mb-1">Work Email (Login)</p>
+                <p className="font-mono text-sm text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2">{createdCredentials.email}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-500 mb-1">Temporary Password</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-sm text-slate-900 bg-white border border-slate-200 rounded-lg px-3 py-2 flex-1">
+                    {showCreatedPass ? createdCredentials.password : '••••••••••••'}
+                  </p>
+                  <button onClick={() => setShowCreatedPass(v => !v)} className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors">
+                    {showCreatedPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentials.password);
+                      setCopiedPass(true);
+                      setTimeout(() => setCopiedPass(false), 2000);
+                    }}
+                    className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-300 transition-colors"
+                  >
+                    {copiedPass ? <CheckCircle2 size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              ⚠️ <strong>Save this password now.</strong> It won't be shown again. The employee should change it on first login.
+            </div>
+            <button
+              onClick={() => { setCreatedCredentials(null); onSuccess(); onClose(); }}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isOpen) return null;
 
@@ -137,23 +211,33 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
       ? `EMP-${formData.badge_id.trim().toUpperCase()}`
       : null;
 
-    const payload = {
+    const payload: any = {
       ...formData,
       badge_id: finalBadgeId,
       department_id: formData.department_id ? Number(formData.department_id) : null,
       job_position_id: formData.job_position_id ? Number(formData.job_position_id) : null,
       manager_id: formData.manager_id ? Number(formData.manager_id) : null,
       working_schedule_id: formData.working_schedule_id ? Number(formData.working_schedule_id) : null,
+      salary_structure_id: formData.salary_structure_id ? Number(formData.salary_structure_id) : null,
+      initial_password: formData.initial_password.trim() || null,
     };
 
     try {
       if (employeeToEdit) {
         await employeesApi.update(employeeToEdit.id, payload);
+        onSuccess();
+        onClose();
       } else {
-        await employeesApi.create(payload);
+        const res = await employeesApi.create(payload);
+        // Show temp-password modal (show-once)
+        const tempPass = res.data?.temp_password;
+        if (tempPass) {
+          setCreatedCredentials({ email: payload.work_email, password: tempPass });
+        } else {
+          onSuccess();
+          onClose();
+        }
       }
-      onSuccess();
-      onClose();
     } catch (err: any) {
       let msg = 'Failed to save employee. Please try again.';
       const detail = err.response?.data?.detail;
@@ -422,6 +506,69 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
               </div>
             </div>
           </div>
+
+          {/* Account Setup Section (create only) */}
+          {!employeeToEdit && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 pt-1">
+                <KeyRound size={15} className="text-indigo-500" />
+                <h4 className="text-sm font-semibold text-slate-800">Login Account Setup</h4>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-indigo-700">
+                  A login account will be created automatically using the work email above.
+                  Set a temporary password below (or leave blank to auto-generate one).
+                </p>
+                <div>
+                  <label className="field-label">Temporary Password</label>
+                  <div className="relative">
+                    <input
+                      type={showInitialPass ? 'text' : 'password'}
+                      value={formData.initial_password}
+                      onChange={e => setFormData({ ...formData, initial_password: e.target.value })}
+                      placeholder="Leave blank to auto-generate"
+                      className="input-field pr-24 font-mono text-xs placeholder:font-sans"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
+                          const pwd = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+                          setFormData({ ...formData, initial_password: pwd });
+                          setShowInitialPass(true);
+                        }}
+                        className="text-[10px] font-semibold text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-300 hover:bg-indigo-100 transition-colors"
+                      >
+                        GEN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowInitialPass(v => !v)}
+                        className="text-slate-400 hover:text-slate-600 p-0.5"
+                        tabIndex={-1}
+                      >
+                        {showInitialPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="field-label">Salary Structure (Optional)</label>
+                  <select
+                    value={formData.salary_structure_id}
+                    onChange={e => setFormData({ ...formData, salary_structure_id: e.target.value })}
+                    className="input-field text-xs"
+                  >
+                    <option value="">— No salary structure assigned —</option>
+                    {salaryStructures.map((ss: any) => (
+                      <option key={ss.id} value={ss.id}>{ss.name} ({ss.code})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">

@@ -631,6 +631,10 @@ def seed():
                         unpaid_leaves += lr.duration_days
 
                 # Compute exact payslip via mathematical rule engine
+                struct_rules = db.query(SalaryRule).filter(
+                    SalaryRule.structure_id == contract.salary_structure_id,
+                    SalaryRule.is_active == True,
+                ).order_by(SalaryRule.sequence).all()
                 gross, deductions, net, lines = compute_payslip(
                     contract=contract,
                     worked_days=worked_days,
@@ -638,7 +642,7 @@ def seed():
                     unpaid_leave_days=unpaid_leaves,
                     paid_leave_days=paid_leaves,
                     overtime_hours=ot_hours,
-                    rules_list=created_rules,
+                    rules_list=struct_rules,
                 )
 
                 payslip = Payslip(

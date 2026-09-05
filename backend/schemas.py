@@ -38,6 +38,51 @@ class TokenResponse(BaseModel):
     full_name: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8, description="Minimum 8 characters")
+    confirm_password: str
+
+    @field_validator("confirm_password")
+    @classmethod
+    def passwords_match(cls, v: str, info: Any) -> str:
+        if "new_password" in info.data and v != info.data["new_password"]:
+            raise ValueError("Passwords do not match")
+        return v
+
+
+class CreateUserRequest(BaseModel):
+    """Admin (all roles) / HR_Manager (Employee role only) creates a user."""
+    email: str  # validated via existing user lookup
+    full_name: str
+    password: str = Field(..., min_length=8)
+    role: UserRole
+    # Optional — link to an existing employee record
+    employee_id: Optional[int] = None
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+    is_active: bool
+    full_name: str
+    badge_id: Optional[str] = None
+    employee_id: Optional[int] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UpdateUserRequest(BaseModel):
+    role: Optional[UserRole] = None
+    is_active: Optional[bool] = None
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(..., min_length=8)
+
+
 # ─────────────────────────────────────────────
 #  Department Schemas
 # ─────────────────────────────────────────────
@@ -128,7 +173,11 @@ class EmployeeBase(BaseModel):
 
 
 class EmployeeCreate(EmployeeBase):
-    pass
+    # Auto-create a login account for this employee on creation
+    initial_password: Optional[str] = Field(None, min_length=8, description="If omitted, a secure temp password is auto-generated")
+    # Optionally assign a salary structure (will create a draft contract)
+    salary_structure_id: Optional[int] = None
+
 
 
 class EmployeeUpdate(BaseModel):
@@ -171,6 +220,8 @@ class EmployeeOut(EmployeeBase):
     full_name: str
     avatar_initials: Optional[str] = None
     avatar_color: Optional[str] = None
+    user_id: Optional[int] = None
+    has_user_account: bool = False
     departure_reason: Optional[str] = None
     departure_date: Optional[date] = None
     departure_notes: Optional[str] = None
@@ -181,6 +232,7 @@ class EmployeeOut(EmployeeBase):
     smart_buttons: Optional[SmartButtonCounts] = None
 
     model_config = {"from_attributes": True}
+
 
 
 # ─────────────────────────────────────────────

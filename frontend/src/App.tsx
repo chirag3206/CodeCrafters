@@ -14,6 +14,8 @@ import PayrunDetailPage from './pages/PayrunDetailPage';
 import PayslipsPage from './pages/PayslipsPage';
 import SalaryStructuresPage from './pages/SalaryStructuresPage';
 import DashboardPage from './pages/DashboardPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
+import UserManagementPage from './pages/UserManagementPage';
 
 export default function App() {
   return (
@@ -139,6 +141,28 @@ export default function App() {
               <ProtectedRoute roles={['HR_Payroll_User', 'HR_Payroll_Manager', 'Admin']}>
                 <Layout>
                   <DashboardPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ChangePasswordPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute roles={['Admin']}>
+                <Layout>
+                  <UserManagementPage />
                 </Layout>
               </ProtectedRoute>
             }

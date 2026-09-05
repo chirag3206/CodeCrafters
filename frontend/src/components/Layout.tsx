@@ -1,10 +1,9 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import PersonaSwitcher from './PersonaSwitcher';
 import {
   Users, FileText, Clock, Calendar, DollarSign,
   Receipt, LayoutDashboard, LogOut, ChevronDown, Shield,
-  X
+  X, KeyRound, UserCog
 } from 'lucide-react';
 
 import { useState, useRef, useEffect } from 'react';
@@ -72,9 +71,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Persona Switcher Bar */}
-      <PersonaSwitcher />
-
       {/* ─── 3-DAY BROADCAST ALERT BANNER (OFFICE HOURS POLICY UPDATE) ─── */}
       {unreadAlerts.map(alert => (
         <div
@@ -163,8 +159,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 animate-slide-up z-50">
-                  <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                <div className="absolute right-0 top-full mt-2 w-60 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 animate-slide-up z-50">
+                  {/* User info header */}
+                  <div className="px-3 py-2.5 border-b border-slate-100 mb-1">
                     <p className="text-xs font-semibold text-slate-900 truncate">{user.full_name}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       <Shield size={10} className="text-indigo-500" />
@@ -176,15 +173,44 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       )}
                     </div>
                   </div>
-                  <button
-                    id="logout-btn"
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-600
-                               hover:bg-rose-50 transition-colors"
+
+                  {/* Change Password — available to ALL roles */}
+                  <NavLink
+                    id="nav-change-password"
+                    to="/change-password"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-700
+                               hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
                   >
-                    <LogOut size={14} />
-                    Sign Out
-                  </button>
+                    <KeyRound size={14} />
+                    Change Password
+                  </NavLink>
+
+                  {/* User Management — Admin only */}
+                  {user.role === 'Admin' && (
+                    <NavLink
+                      id="nav-user-management"
+                      to="/users"
+                      onClick={() => setUserMenuOpen(false)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-700
+                                 hover:bg-purple-50 hover:text-purple-700 transition-colors"
+                    >
+                      <UserCog size={14} />
+                      User Management
+                    </NavLink>
+                  )}
+
+                  <div className="border-t border-slate-100 mt-1 pt-1">
+                    <button
+                      id="logout-btn"
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-rose-600
+                                 hover:bg-rose-50 transition-colors"
+                    >
+                      <LogOut size={14} />
+                      Sign Out
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

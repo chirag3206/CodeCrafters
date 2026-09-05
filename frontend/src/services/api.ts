@@ -38,6 +38,24 @@ export const authApi = {
   switchPersona: (persona_key: string) =>
     api.post('/auth/switch-persona', { persona_key }),
   getMe: () => api.get('/auth/me'),
+
+  // Change own password (all authenticated roles)
+  changePassword: (current_password: string, new_password: string, confirm_password: string) =>
+    api.post('/auth/change-password', { current_password, new_password, confirm_password }),
+
+  // User management (Admin / HR Manager)
+  listUsers: () => api.get('/auth/users'),
+  createUser: (data: {
+    email: string;
+    full_name: string;
+    password: string;
+    role: string;
+    employee_id?: number;
+  }) => api.post('/auth/users', data),
+  updateUser: (id: number, data: { role?: string; is_active?: boolean }) =>
+    api.put(`/auth/users/${id}`, data),
+  resetPassword: (id: number, new_password: string) =>
+    api.post(`/auth/users/${id}/reset-password`, { new_password }),
 };
 
 // ── Employees ─────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, Eye, EyeOff, ShieldCheck, Lock } from 'lucide-react';
+import { LogIn, Eye, EyeOff, ShieldCheck, Lock, Info } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showForgot, setShowForgot] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +43,7 @@ export default function LoginPage() {
           PeoplePay360
         </h1>
         <p className="mt-1 text-sm font-medium text-slate-500">
-          Enterprise Payroll & Workforce Governance System
+          Enterprise Payroll &amp; Workforce Governance System
         </p>
       </div>
 
@@ -60,7 +61,7 @@ export default function LoginPage() {
                 id="login-email"
                 type="email"
                 className="input-field"
-                placeholder="aarav.sharma@peoplepay360.com"
+                placeholder="your.name@company.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
@@ -71,7 +72,13 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="field-label mb-0">Password</label>
-                <span className="text-xs text-indigo-600 hover:text-indigo-700 cursor-pointer font-medium">Forgot?</span>
+                <button
+                  type="button"
+                  onClick={() => setShowForgot(v => !v)}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                >
+                  Forgot password?
+                </button>
               </div>
               <div className="relative">
                 <input
@@ -93,6 +100,17 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {/* Forgot Password Hint */}
+            {showForgot && (
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs flex items-start gap-2 animate-fade-in">
+                <Info size={14} className="shrink-0 mt-0.5 text-blue-500" />
+                <span>
+                  Password resets are managed by your system administrator.
+                  Please contact your <strong>Admin</strong> to reset your password.
+                </span>
+              </div>
+            )}
 
             {error && (
               <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-2 animate-fade-in">
@@ -118,7 +136,29 @@ export default function LoginPage() {
             </div>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+          {/* Role hints */}
+          <div className="mt-5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">System Roles</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: 'Admin', color: '#7c3aed' },
+                { label: 'HR Manager', color: '#0369a1' },
+                { label: 'Payroll Manager', color: '#047857' },
+                { label: 'Payroll User', color: '#b45309' },
+                { label: 'Employee', color: '#be123c' },
+              ].map(r => (
+                <span
+                  key={r.label}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                  style={{ color: r.color, borderColor: r.color + '50', backgroundColor: r.color + '12' }}
+                >
+                  {r.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 pt-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
             <span>Secure 256-bit SSL Session</span>
             <span>v2.4 Enterprise</span>
           </div>

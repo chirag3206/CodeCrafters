@@ -9,6 +9,7 @@ interface AuthContextValue {
   switchPersona: (key: string) => Promise<void>;
   logout: () => void;
   hasRole: (...roles: UserRole[]) => boolean;
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -56,8 +57,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user ? roles.includes(user.role) : false;
   };
 
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string
+  ): Promise<string> => {
+    const res = await authApi.changePassword(currentPassword, newPassword, confirmPassword);
+    return res.data.message as string;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, switchPersona, logout, hasRole }}>
+    <AuthContext.Provider value={{ user, isLoading, login, switchPersona, logout, hasRole, changePassword }}>
       {children}
     </AuthContext.Provider>
   );
