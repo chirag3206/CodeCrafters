@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+    SMTP_TLS: bool = True          # Use STARTTLS (required for Gmail port 587)
     SMTP_FROM: str = "noreply@peoplepay360.com"
     COMPANY_NAME: str = "PeoplePay360 Inc."
 
