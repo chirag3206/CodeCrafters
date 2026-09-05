@@ -22,7 +22,7 @@ from schemas import (
 )
 from services.salary_engine import compute_payslip
 from services.validator_service import inspect_candidate_anomalies, run_pre_validation_checks
-from services.pdf_service import generate_payslip_pdf
+from services.pdf_service import generate_payslip_pdf, generate_payslip_pdf_bytes
 from services.email_service import dispatch_email
 from services.export_service import export_payrun_excel, export_payrun_csv, export_bank_ach_csv
 
@@ -388,25 +388,57 @@ def mark_payrun_paid(payrun_id: int, db: Session = Depends(get_db)):
         pdf_path = generate_payslip_pdf(slip)
         slip.pdf_path = pdf_path
 
-        # Automatically notify employee and distribute payslip
+        # Generate PDF and email to employee
         emp = slip.employee
         if emp:
+            period_label = payrun.period_start.strftime('%B %Y')
+            pdf_bytes = generate_payslip_pdf_bytes(slip)
+            pdf_filename = f"Payslip_{period_label.replace(' ', '_')}_{emp.badge_id or emp.id}.pdf"
             body = f"""
-            <h3>Official Payslip Available</h3>
-            <p>Dear {emp.first_name},</p>
-            <p>Your official payslip for <b>{payrun.period_start} to {payrun.period_end}</b> has been signed off and approved by the HR Payroll Manager.</p>
-            <p>Net Amount Credited: <b>₹{slip.net_pay:,.2f}</b></p>
-            <p>You can view and download your full ReportLab PDF payslip from your PeoplePay360 Employee Portal.</p>
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b">
+              <div style="background:linear-gradient(135deg,#4338ca,#6366f1);padding:28px 32px;border-radius:10px 10px 0 0">
+                <h2 style="color:#fff;margin:0;font-size:22px">&#x1F4B0; Salary Credited — {period_label}</h2>
+                <p style="color:#c7d2fe;margin:6px 0 0">PeoplePay360 Enterprise &bull; Official Payslip</p>
+              </div>
+              <div style="background:#f8fafc;padding:28px 32px;border:1px solid #e2e8f0;border-top:none">
+                <p style="margin:0 0 16px">Dear <b>{emp.first_name}</b>,</p>
+                <p>Your salary for <b>{period_label}</b> has been <span style="color:#10b981"><b>approved and disbursed</b></span> by the Payroll Manager.</p>
+                <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+                  <tr style="background:#eef2ff">
+                    <td style="padding:10px 16px;font-weight:600;color:#4338ca;font-size:13px">Pay Period</td>
+                    <td style="padding:10px 16px;font-size:13px">{payrun.period_start} &rarr; {payrun.period_end}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 16px;font-weight:600;font-size:13px">Gross Pay</td>
+                    <td style="padding:10px 16px;font-size:13px">&#x20B9; {slip.gross_pay:,.2f}</td>
+                  </tr>
+                  <tr style="background:#f1f5f9">
+                    <td style="padding:10px 16px;font-weight:600;font-size:13px">Total Deductions</td>
+                    <td style="padding:10px 16px;font-size:13px;color:#ef4444">(&#x20B9; {slip.total_deductions:,.2f})</td>
+                  </tr>
+                  <tr style="background:#ecfdf5">
+                    <td style="padding:12px 16px;font-weight:700;font-size:15px;color:#10b981">Net Take-Home</td>
+                    <td style="padding:12px 16px;font-weight:700;font-size:15px;color:#10b981">&#x20B9; {slip.net_pay:,.2f}</td>
+                  </tr>
+                </table>
+                <p style="color:#64748b;font-size:13px">&#x1F4CE; Your complete payslip PDF is attached to this email. You can also view and download it anytime from the <b>PeoplePay360 Employee Portal</b>.</p>
+              </div>
+              <div style="background:#f1f5f9;padding:14px 32px;border-radius:0 0 10px 10px;border:1px solid #e2e8f0;border-top:none;text-align:center">
+                <p style="color:#94a3b8;font-size:11px;margin:0">This is a system-generated email from PeoplePay360. Do not reply to this email.</p>
+              </div>
+            </div>
             """
             dispatch_email(
                 recipient_email=emp.work_email,
                 recipient_name=f"{emp.first_name} {emp.last_name}",
-                subject=f"Official Payslip: {payrun.period_start.strftime('%B %Y')}",
+                subject=f"\U0001f4b0 Salary Credited — {period_label} | PeoplePay360",
                 body_html=body,
                 email_type="payslip",
                 db=db,
                 payslip_id=slip.id,
                 payrun_id=payrun.id,
+                attachment_bytes=pdf_bytes,
+                attachment_filename=pdf_filename,
             )
 
     db.commit()
@@ -426,26 +458,58 @@ def send_payslips_batch(payrun_id: int, db: Session = Depends(get_db)):
     for slip in payrun.payslips:
         emp = slip.employee
         if emp:
+            period_label = payrun.period_start.strftime('%B %Y')
+            pdf_bytes = generate_payslip_pdf_bytes(slip)
+            pdf_filename = f"Payslip_{period_label.replace(' ', '_')}_{emp.badge_id or emp.id}.pdf"
             body = f"""
-            <h3>Official Payslip Available</h3>
-            <p>Dear {emp.first_name},</p>
-            <p>Your payslip for <b>{payrun.period_start} to {payrun.period_end}</b> has been generated.</p>
-            <p>Net Amount Credited: <b>${slip.net_pay:,.2f}</b></p>
-            <p>You can download the full PDF from your PeoplePay360 Employee Portal.</p>
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b">
+              <div style="background:linear-gradient(135deg,#4338ca,#6366f1);padding:28px 32px;border-radius:10px 10px 0 0">
+                <h2 style="color:#fff;margin:0;font-size:22px">&#x1F4B0; Payslip Ready — {period_label}</h2>
+                <p style="color:#c7d2fe;margin:6px 0 0">PeoplePay360 Enterprise &bull; Official Payslip</p>
+              </div>
+              <div style="background:#f8fafc;padding:28px 32px;border:1px solid #e2e8f0;border-top:none">
+                <p style="margin:0 0 16px">Dear <b>{emp.first_name}</b>,</p>
+                <p>Your payslip for <b>{period_label}</b> is now available. Please find the complete PDF payslip attached to this email.</p>
+                <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+                  <tr style="background:#eef2ff">
+                    <td style="padding:10px 16px;font-weight:600;color:#4338ca;font-size:13px">Pay Period</td>
+                    <td style="padding:10px 16px;font-size:13px">{payrun.period_start} &rarr; {payrun.period_end}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 16px;font-weight:600;font-size:13px">Gross Pay</td>
+                    <td style="padding:10px 16px;font-size:13px">&#x20B9; {slip.gross_pay:,.2f}</td>
+                  </tr>
+                  <tr style="background:#f1f5f9">
+                    <td style="padding:10px 16px;font-weight:600;font-size:13px">Total Deductions</td>
+                    <td style="padding:10px 16px;font-size:13px;color:#ef4444">(&#x20B9; {slip.total_deductions:,.2f})</td>
+                  </tr>
+                  <tr style="background:#ecfdf5">
+                    <td style="padding:12px 16px;font-weight:700;font-size:15px;color:#10b981">Net Take-Home</td>
+                    <td style="padding:12px 16px;font-weight:700;font-size:15px;color:#10b981">&#x20B9; {slip.net_pay:,.2f}</td>
+                  </tr>
+                </table>
+                <p style="color:#64748b;font-size:13px">&#x1F4CE; The complete payslip PDF is attached. You can also access it from the <b>PeoplePay360 Employee Portal</b>.</p>
+              </div>
+              <div style="background:#f1f5f9;padding:14px 32px;border-radius:0 0 10px 10px;border:1px solid #e2e8f0;border-top:none;text-align:center">
+                <p style="color:#94a3b8;font-size:11px;margin:0">This is a system-generated email from PeoplePay360. Do not reply to this email.</p>
+              </div>
+            </div>
             """
             dispatch_email(
                 recipient_email=emp.work_email,
                 recipient_name=f"{emp.first_name} {emp.last_name}",
-                subject=f"Payslip Available: {payrun.period_start.strftime('%B %Y')}",
+                subject=f"\U0001f4b0 Payslip Ready — {period_label} | PeoplePay360",
                 body_html=body,
                 email_type="payslip",
                 db=db,
                 payslip_id=slip.id,
                 payrun_id=payrun.id,
+                attachment_bytes=pdf_bytes,
+                attachment_filename=pdf_filename,
             )
             count += 1
 
-    return MessageResponse(message=f"Payslip email notifications queued for {count} staff.", success=True)
+    return MessageResponse(message=f"Payslip PDF dispatched to {count} employees successfully.", success=True)
 
 
 # ─── EXPORT SUITE ────────────────────────────────────────────────────────────
