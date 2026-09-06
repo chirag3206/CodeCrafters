@@ -479,6 +479,9 @@ class PayrunCandidateOut(BaseModel):
     has_bank_details: bool
     has_duplicate_payslip: bool
     verification_status: Optional[str] = "Pending"
+    leave_encashment_days: Optional[float] = 0.0
+    leave_encashment_amount: Optional[float] = 0.0
+    is_final_settlement: bool = False
     warnings: List[str] = []
 
     model_config = {"from_attributes": True}

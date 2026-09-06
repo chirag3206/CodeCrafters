@@ -75,6 +75,13 @@ def get_eligible_candidates(
             Contract.status.in_([ContractStatus.ACTIVE, ContractStatus.EXPIRED])
         ).order_by(Contract.start_date.desc()).first()
 
+        # Exclude employees who were offboarded prior to period_start and have no contract in this period
+        if emp.status != EmployeeStatus.ACTIVE:
+            is_exit_period = bool(emp.departure_date and emp.departure_date >= period_start)
+            has_contract_in_period = bool(contract and (contract.end_date is None or contract.end_date >= period_start))
+            if not is_exit_period and not has_contract_in_period:
+                continue
+
         dup_slip = db.query(Payslip).join(Payrun).filter(
             Payslip.employee_id == emp.id,
             Payrun.period_start <= period_end,
@@ -95,6 +102,18 @@ def get_eligible_candidates(
         if v_status == "Disputed":
             warnings.append(f"Unresolved attendance dispute: {pv.grievance_category or 'Grievance'}")
 
+        # EL Leave Encashment & Exit Settlement status
+        encash_days = float(emp.leave_encashment_days or 0.0)
+        encash_amt = float(emp.leave_encashment_amount or 0.0)
+        is_final = (emp.status != EmployeeStatus.ACTIVE) or (encash_amt > 0.0)
+
+        if encash_amt > 0:
+            warnings.append(
+                f"🌴 Final Exit Settlement: Includes ₹{encash_amt:,.2f} Earned Leave (EL) Encashment ({encash_days:.1f} Unused Days)"
+            )
+        elif is_final and emp.status != EmployeeStatus.ACTIVE:
+            warnings.append(f"Exit Settlement ({emp.status.value}): Contract ended on {emp.departure_date or 'today'}")
+
         candidates.append(PayrunCandidateOut(
             employee_id=emp.id,
             badge_id=emp.badge_id,
@@ -108,6 +127,9 @@ def get_eligible_candidates(
             has_bank_details=bool(emp.bank_account_no and emp.ifsc_swift),
             has_duplicate_payslip=bool(dup_slip),
             verification_status=v_status,
+            leave_encashment_days=encash_days,
+            leave_encashment_amount=encash_amt,
+            is_final_settlement=is_final,
             warnings=warnings,
         ))
 

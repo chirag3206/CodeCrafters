@@ -22,6 +22,9 @@ interface Candidate {
   has_duplicate_payslip: boolean;
   warnings: string[];
   verification_status?: string | null;
+  leave_encashment_days?: number | null;
+  leave_encashment_amount?: number | null;
+  is_final_settlement?: boolean;
 }
 
 export default function PayrollPage() {
@@ -461,6 +464,11 @@ export default function PayrollPage() {
                                 >
                                   {c.verification_status || 'Pending'}
                                 </span>
+                                {c.leave_encashment_amount && c.leave_encashment_amount > 0 ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
+                                    🌴 Final Exit Settlement
+                                  </span>
+                                ) : null}
                               </div>
                               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
                                 <span>
@@ -494,10 +502,16 @@ export default function PayrollPage() {
                             </div>
                           </div>
 
-
-                          <span className="text-xs font-mono font-semibold text-slate-800 shrink-0">
-                            {c.contract_wage ? `₹${c.contract_wage.toFixed(2)}` : '—'}
-                          </span>
+                          <div className="text-right shrink-0">
+                            <span className="text-xs font-mono font-bold text-slate-900 block">
+                              ₹{((c.contract_wage || 0) + (c.leave_encashment_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                            {c.leave_encashment_amount && c.leave_encashment_amount > 0 ? (
+                              <span className="text-[10px] text-purple-700 font-semibold block mt-0.5">
+                                Base: ₹{(c.contract_wage || 0).toLocaleString('en-IN')} + EL: ₹{(c.leave_encashment_amount).toLocaleString('en-IN')}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       );
                     })}
