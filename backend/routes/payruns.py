@@ -12,7 +12,7 @@ from database import get_db
 from dependencies import get_current_user, require_payroll_user, require_payroll_manager
 from models import (
     Payrun, PayrunStatus, Payslip, PayslipStatus, PayslipLine,
-    Employee, Contract, ContractStatus, SalaryStructure, SalaryRule,
+    Employee, EmployeeStatus, Contract, ContractStatus, SalaryStructure, SalaryRule,
     Attendance, AttendanceStatus, TimeOffRequest, TimeOffRequestStatus,
     TimeOffType, VerificationStatus, PrePayrollVerification, AttendancePeriodLock
 )

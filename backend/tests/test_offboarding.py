@@ -236,3 +236,23 @@ def test_el_carry_forward_and_encashment_on_offboard():
         db.commit()
     finally:
         db.close()
+
+
+def test_payrun_candidates_endpoint():
+    db = SessionLocal()
+    try:
+        payroll_user = db.query(User).filter(User.role.in_([UserRole.HR_PAYROLL_MANAGER, UserRole.ADMIN])).first()
+        assert payroll_user is not None
+        token = create_access_token(data={"sub": str(payroll_user.id), "role": payroll_user.role.value})
+        headers = {"Authorization": f"Bearer {token}"}
+
+        res = client.get(
+            "/api/payruns/eligible-candidates?period_start=2026-08-01&period_end=2026-08-31",
+            headers=headers,
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert isinstance(data, list)
+    finally:
+        db.close()
+
