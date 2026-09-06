@@ -37,6 +37,7 @@ function formatTime(dtStr: string | null | undefined): string {
 
 export default function AttendancePage() {
   const { user } = useAuth();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const filterEmpId = searchParams.get('employee_id');
 
@@ -130,11 +131,11 @@ export default function AttendancePage() {
         month: selectedLockMonth,
         approval_notes: lockNotes,
       });
-      alert(res.data.message || 'Attendance period approved and locked for payroll.');
+      toast.success(res.data.message || 'Attendance period approved and locked for payroll.');
       setIsLockModalOpen(false);
       await loadLockStatus();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to lock attendance period');
+      toast.error(err.response?.data?.detail || 'Failed to lock attendance period');
     } finally {
       setIsLocking(false);
     }
@@ -151,8 +152,9 @@ export default function AttendancePage() {
       // Automatically send current live real-time ISO timestamp
       await attendanceApi.punch(action, new Date().toISOString());
       await loadData();
+      toast.success(action === 'check_in' ? 'Punched in successfully!' : 'Punched out successfully!');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Punch failed');
+      toast.error(err.response?.data?.detail || 'Punch failed');
     } finally {
       setPunchLoading(false);
     }
@@ -166,18 +168,19 @@ export default function AttendancePage() {
         status: correctedStatus,
         correction_notes: correctionNotes,
       });
+      toast.success('Audited correction saved successfully.');
       setCorrectingRecord(null);
       setCorrectionNotes('');
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Correction failed');
+      toast.error(err.response?.data?.detail || 'Correction failed');
     }
   };
 
   const handleOfficeHoursSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hoursData.reason || hoursData.reason.trim().length < 5) {
-      alert('Please provide a mandatory protocol reason for changing company office hours.');
+      toast.error('Please provide a mandatory protocol reason for changing company office hours.');
       return;
     }
     try {
@@ -190,6 +193,7 @@ export default function AttendancePage() {
         effective_date: hoursData.effective_date,
         reason: hoursData.reason,
       });
+      toast.success('Office timings updated & broadcast published!');
       setHoursSuccessMsg('Office timings updated & 3-day company-wide broadcast alert published!');
       setTimeout(() => {
         setIsHoursModalOpen(false);
@@ -197,7 +201,7 @@ export default function AttendancePage() {
         loadData();
       }, 1500);
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to update office hours');
+      toast.error(err.response?.data?.detail || 'Failed to update office hours');
     } finally {
       setHoursSubmitting(false);
     }
@@ -241,18 +245,25 @@ export default function AttendancePage() {
 
         <div className="flex items-center gap-2 flex-wrap">
           {canAuditAttendance && (
-            <button
-              id="btn-lock-attendance-period"
-              onClick={() => setIsLockModalOpen(true)}
-              className={`text-xs font-semibold px-3.5 py-2 rounded-xl border transition-all flex items-center gap-1.5 shadow-2xs ${
-                lockStatus?.is_locked
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent'
-              }`}
-            >
-              <ShieldCheck size={15} />
-              {lockStatus?.is_locked ? `✓ Locked for Payroll (${selectedLockMonth})` : `Approve & Lock Attendance (${selectedLockMonth})`}
-            </button>
+            lockStatus?.is_locked ? (
+              <div
+                id="badge-lock-attendance-period"
+                className="text-xs font-semibold px-3.5 py-2 rounded-xl border flex items-center gap-1.5 shadow-2xs bg-emerald-50 border-emerald-300 text-emerald-800 cursor-default"
+                title={`Attendance for ${selectedLockMonth} is locked and paid.`}
+              >
+                <ShieldCheck size={15} className="text-emerald-600" />
+                <span>✓ Locked for Payroll ({selectedLockMonth})</span>
+              </div>
+            ) : (
+              <button
+                id="btn-lock-attendance-period"
+                onClick={() => setIsLockModalOpen(true)}
+                className="text-xs font-semibold px-3.5 py-2 rounded-xl border transition-all flex items-center gap-1.5 shadow-2xs bg-indigo-600 hover:bg-indigo-700 text-white border-transparent"
+              >
+                <ShieldCheck size={15} />
+                <span>Approve &amp; Lock Attendance ({selectedLockMonth})</span>
+              </button>
+            )
           )}
 
           {isAdmin && (
@@ -280,7 +291,7 @@ export default function AttendancePage() {
                 Step 2 Complete — Attendance for {lockStatus.month} is Approved &amp; Locked for Payroll
               </p>
               <p className="text-emerald-800 mt-0.5">
-                Approved by <b>{lockStatus.locked_by_name || 'HR Manager'}</b> on {lockStatus.locked_at?.slice(0, 10)}. Note: "{lockStatus.approval_notes}"
+                Approved by <b>{lockStatus.locked_by_name || 'HR Manager'}</b>{lockStatus.locked_at ? ` on ${lockStatus.locked_at.slice(0, 10)}` : ''}. Note: "{lockStatus.approval_notes}"
               </p>
               <span className="text-[11px] text-emerald-700 block mt-0.5">
                 Eligible employees have been notified to verify their statements. Payroll processing batch is now unlocked.
@@ -294,9 +305,15 @@ export default function AttendancePage() {
               onChange={(e) => setSelectedLockMonth(e.target.value)}
               className="bg-white text-xs font-bold text-emerald-800 border border-emerald-300 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer shadow-xs"
             >
-              <option value="2026-08">August 2026</option>
               <option value="2026-09">September 2026</option>
+              <option value="2026-08">August 2026</option>
               <option value="2026-07">July 2026</option>
+              <option value="2026-06">June 2026 (Paid)</option>
+              <option value="2026-05">May 2026 (Paid)</option>
+              <option value="2026-04">April 2026 (Paid)</option>
+              <option value="2026-03">March 2026 (Paid)</option>
+              <option value="2026-02">February 2026 (Paid)</option>
+              <option value="2026-01">January 2026 (Paid)</option>
             </select>
           </div>
         </div>
@@ -766,9 +783,15 @@ export default function AttendancePage() {
                   onChange={(e) => setSelectedLockMonth(e.target.value)}
                   className="input-field font-semibold"
                 >
-                  <option value="2026-08">August 2026 (Unrun Payrun Cycle)</option>
                   <option value="2026-09">September 2026 (Live Current)</option>
-                  <option value="2026-07">July 2026 (Historical)</option>
+                  <option value="2026-08">August 2026 (Unrun Payrun Cycle)</option>
+                  <option value="2026-07">July 2026 (Unrun Payrun Cycle)</option>
+                  <option value="2026-06">June 2026 (Historical Paid)</option>
+                  <option value="2026-05">May 2026 (Historical Paid)</option>
+                  <option value="2026-04">April 2026 (Historical Paid)</option>
+                  <option value="2026-03">March 2026 (Historical Paid)</option>
+                  <option value="2026-02">February 2026 (Historical Paid)</option>
+                  <option value="2026-01">January 2026 (Historical Paid)</option>
                 </select>
               </div>
 

@@ -29,7 +29,24 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        from sqlalchemy import text
+        try:
+            conn.execute(text("ALTER TABLE time_off_requests ADD COLUMN rejection_reason TEXT"))
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
     os.makedirs("generated_payslips", exist_ok=True)
+    # Ensure all users (including HR & Admins) have active employee profiles & contracts for payroll
+    from database import SessionLocal
+    from routes.employees import ensure_all_users_have_employee_and_contract
+    db_session = SessionLocal()
+    try:
+        ensure_all_users_have_employee_and_contract(db_session)
+    except Exception as e:
+        print(f"Warning during user/contract sync: {e}")
+    finally:
+        db_session.close()
     yield
 
 

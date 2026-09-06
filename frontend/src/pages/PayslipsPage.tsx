@@ -70,12 +70,12 @@ export default function PayslipsPage() {
         grievance_category: disputeCategory,
         grievance_remarks: disputeRemarks,
       });
-      alert(`Post-payroll grievance filed for ${disputeSlip.period_start}. The HR Payroll team will audit your pay calculation.`);
+      toast.info(`Post-payroll grievance filed for ${disputeSlip.period_start}. The HR Payroll team will audit your pay calculation.`);
       setDisputeSlip(null);
       setDisputeRemarks('');
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to submit post-payroll grievance');
+      toast.error(err.response?.data?.detail || 'Failed to submit post-payroll grievance');
     } finally {
       setIsSubmittingDispute(false);
     }
@@ -90,12 +90,12 @@ export default function PayslipsPage() {
         action: resolutionAction,
         resolution_notes: resolutionNotes,
       });
-      alert(`Post-payroll grievance resolved (${resolutionAction === 'accept_adjust' ? 'Accepted & Adjusted' : 'Rejected'}).`);
+      toast.success(`Post-payroll grievance resolved (${resolutionAction === 'accept_adjust' ? 'Accepted & Adjusted' : 'Rejected'}).`);
       setResolvingSlip(null);
       setResolutionNotes('');
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to resolve grievance');
+      toast.error(err.response?.data?.detail || 'Failed to resolve grievance');
     } finally {
       setIsSubmittingResolution(false);
     }

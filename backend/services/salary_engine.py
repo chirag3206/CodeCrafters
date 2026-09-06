@@ -69,12 +69,16 @@ def compute_payslip(
     # Safe proxy for contract if ORM model or mock
     wage_val = getattr(contract, "wage", 0.0) if contract else 0.0
 
-    # Prorated wage: scale full-month wage by days actually payable
-    # payable_days = worked_days (attendance) + paid_leave_days (approved paid leave)
-    # For a complete month, prorated_wage == contract.wage.
-    # For a partial period (e.g., Sep 1-5), it correctly scales down.
-    payable_days = worked_days + paid_leave_days
-    prorated_wage = round((wage_val / total_working_days) * payable_days, 2) if total_working_days > 0 else wage_val
+    # Prorated wage calculation:
+    # If employee was employed for only a partial period (e.g. joined/left mid-month where total_accounted_days < total_working_days),
+    # scale full-month contract wage to the employed days.
+    # For a full month (worked + paid_leave + unpaid_leave == total_working_days), contract.wage remains full,
+    # and unpaid leave is deducted via LOP_DEDUCTION rule without double deduction.
+    total_accounted_days = worked_days + paid_leave_days + unpaid_leave_days
+    if total_working_days > 0 and total_accounted_days < total_working_days:
+        prorated_wage = round((wage_val / total_working_days) * total_accounted_days, 2)
+    else:
+        prorated_wage = wage_val
 
     # Build a contract proxy that exposes prorated_wage as .wage
     # so salary rules using `contract.wage` automatically get the prorated value.
@@ -86,6 +90,8 @@ def compute_payslip(
             return getattr(self._orig, name)
 
     contract_proxy = _ContractProxy(contract, prorated_wage) if contract else type("ContractMock", (), {"wage": 0.0})()
+
+    payable_days = worked_days + paid_leave_days
 
     context = {
         "contract": contract_proxy,

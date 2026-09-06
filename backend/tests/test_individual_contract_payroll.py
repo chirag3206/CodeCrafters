@@ -65,6 +65,18 @@ def test_individual_contract_payroll_computation():
             )
             db.add(c2)
 
+        # Ensure emp1 and emp2 have full attendance in August 2026 for testing contract formulas
+        from datetime import timedelta
+        from models import Attendance, AttendanceStatus
+        for emp in [emp1, emp2]:
+            cur = date(2026, 8, 1)
+            while cur <= date(2026, 8, 31):
+                if cur.weekday() < 5:
+                    att = db.query(Attendance).filter(Attendance.employee_id == emp.id, Attendance.date == cur).first()
+                    if not att:
+                        db.add(Attendance(employee_id=emp.id, date=cur, status=AttendanceStatus.PRESENT, worked_hours=8.0))
+                cur += timedelta(days=1)
+
         import time
         # Clean up any leftover test payruns
         for old in db.query(Payrun).filter(Payrun.reference.like("TEST/PAY/%")).all():

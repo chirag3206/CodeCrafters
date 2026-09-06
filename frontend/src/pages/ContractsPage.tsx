@@ -416,10 +416,11 @@ export default function ContractsPage() {
     try {
       setIsTerminating(true);
       await contractsApi.terminate(deletingContractId);
+      toast.success('Contract terminated successfully.');
       setDeletingContractId(null);
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to terminate contract');
+      toast.error(err.response?.data?.detail || 'Failed to terminate contract');
     } finally {
       setIsTerminating(false);
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Save, AlertCircle, KeyRound, Eye, EyeOff, Copy, CheckCircle2 } from 'lucide-react';
-import { employeesApi, salaryConfigApi } from '../services/api';
+import { X, UserPlus, Save, AlertCircle, KeyRound, Eye, EyeOff, Copy, CheckCircle2, Calendar } from 'lucide-react';
+import { employeesApi, leavesApi } from '../services/api';
+import type { TimeOffType } from '../types';
 
 interface Department {
   id: number;
@@ -29,7 +30,8 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
   const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
   const [schedules, setSchedules] = useState<WorkingSchedule[]>([]);
   const [managers, setManagers] = useState<any[]>([]);
-  const [salaryStructures, setSalaryStructures] = useState<any[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<TimeOffType[]>([]);
+  const [leaveAllocations, setLeaveAllocations] = useState<{ [key: number]: number }>({});
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copiedPass, setCopiedPass] = useState(false);
   const [showCreatedPass, setShowCreatedPass] = useState(false);
@@ -48,12 +50,13 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
     manager_id: '',
     working_schedule_id: '',
     employment_type: 'Full-Time',
+    system_role: 'Employee',
+    contract_wage: '',
     bank_name: '',
     bank_account_no: '',
     ifsc_swift: '',
     // New auth fields (create only)
     initial_password: '',
-    salary_structure_id: '',
   });
   const [showInitialPass, setShowInitialPass] = useState(false);
 
@@ -68,32 +71,59 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
   useEffect(() => {
     if (!isOpen) return;
 
-    // Load reference lists
+    // Load reference lists & leave types
     const loadRefs = async () => {
       try {
-        const [deptRes, posRes, schedRes, empRes] = await Promise.all([
+        const [deptRes, posRes, schedRes, empRes, typesRes] = await Promise.all([
           employeesApi.departments(),
           employeesApi.jobPositions(),
           employeesApi.workingSchedules(),
-          employeesApi.list({ limit: 100 })
+          employeesApi.list({ limit: 100 }),
+          leavesApi.types(),
         ]);
         setDepartments(deptRes.data);
         setJobPositions(posRes.data);
         setSchedules(schedRes.data);
         setManagers(empRes.data);
+        const types: TimeOffType[] = typesRes.data || [];
+        setLeaveTypes(types);
+
+        if (employeeToEdit) {
+          try {
+            const allocRes = await leavesApi.allocations(employeeToEdit.id);
+            const allocMap: { [key: number]: number } = {};
+            (allocRes.data || []).forEach((alloc: any) => {
+              allocMap[alloc.leave_type_id] = alloc.allocated_days;
+            });
+            // Ensure all leave types exist in map
+            types.forEach(t => {
+              if (allocMap[t.id] === undefined) {
+                allocMap[t.id] = t.max_days_per_year ?? 10;
+              }
+            });
+            setLeaveAllocations(allocMap);
+          } catch {
+            const allocMap: { [key: number]: number } = {};
+            types.forEach(t => { allocMap[t.id] = t.max_days_per_year ?? 10; });
+            setLeaveAllocations(allocMap);
+          }
+        } else {
+          const allocMap: { [key: number]: number } = {};
+          types.forEach(t => {
+            if (t.max_days_per_year != null) {
+              allocMap[t.id] = t.max_days_per_year;
+            } else {
+              const nameLower = t.name.toLowerCase();
+              allocMap[t.id] = nameLower.includes('annual') ? 12 : nameLower.includes('sick') ? 10 : nameLower.includes('casual') ? 6 : 10;
+            }
+          });
+          setLeaveAllocations(allocMap);
+        }
       } catch (err) {
         console.error('Failed to load reference data', err);
       }
     };
     loadRefs();
-
-    const loadSalaryStructures = async () => {
-      try {
-        const res = await salaryConfigApi.structures();
-        setSalaryStructures(res.data || []);
-      } catch { /* ignore */ }
-    };
-    loadSalaryStructures();
 
     if (employeeToEdit) {
       setFormData({
@@ -110,11 +140,12 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
         manager_id: employeeToEdit.manager_id ? String(employeeToEdit.manager_id) : '',
         working_schedule_id: employeeToEdit.working_schedule_id ? String(employeeToEdit.working_schedule_id) : '',
         employment_type: employeeToEdit.employment_type || 'Full-Time',
+        system_role: employeeToEdit.system_role || 'Employee',
+        contract_wage: '',
         bank_name: employeeToEdit.bank_name || '',
         bank_account_no: employeeToEdit.bank_account_no || '',
         ifsc_swift: employeeToEdit.ifsc_swift || '',
         initial_password: '',
-        salary_structure_id: '',
       });
     } else {
       setFormData({
@@ -131,11 +162,12 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
         manager_id: '',
         working_schedule_id: '',
         employment_type: 'Full-Time',
+        system_role: 'Employee',
+        contract_wage: '55000',
         bank_name: '',
         bank_account_no: '',
         ifsc_swift: '',
         initial_password: '',
-        salary_structure_id: '',
       });
     }
     setError(null);
@@ -218,8 +250,11 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
       job_position_id: formData.job_position_id ? Number(formData.job_position_id) : null,
       manager_id: formData.manager_id ? Number(formData.manager_id) : null,
       working_schedule_id: formData.working_schedule_id ? Number(formData.working_schedule_id) : null,
-      salary_structure_id: formData.salary_structure_id ? Number(formData.salary_structure_id) : null,
       initial_password: formData.initial_password.trim() || null,
+      leave_allocations: Object.entries(leaveAllocations).map(([typeId, days]) => ({
+        leave_type_id: Number(typeId),
+        allocated_days: Number(days) || 0,
+      })),
     };
 
     try {
@@ -440,7 +475,22 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="field-label font-semibold text-indigo-700">System Account Role *</label>
+                <select
+                  required
+                  value={formData.system_role}
+                  onChange={(e) => setFormData({ ...formData, system_role: e.target.value })}
+                  className="input-field text-xs font-semibold border-indigo-200 bg-indigo-50/50"
+                >
+                  <option value="Employee">Employee (Standard Portal)</option>
+                  <option value="HR_Manager">HR Manager (Leave & Staff Admin)</option>
+                  <option value="HR_Payroll_User">HR Payroll Specialist</option>
+                  <option value="HR_Payroll_Manager">HR Payroll Manager</option>
+                  <option value="Admin">Admin (Full System Control)</option>
+                </select>
+              </div>
               <div>
                 <label className="field-label">Working Schedule</label>
                 <select
@@ -507,10 +557,63 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
             </div>
           </div>
 
+          {/* Annual Leave Allocations Section */}
+          <div className="space-y-3 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar size={16} className="text-emerald-600" />
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Annual Leave Quotas (Calendar Year {new Date().getFullYear()})
+                </h4>
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium">Max Days / Year</span>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Specify the maximum number of leaves that can be allocated to this employee for each leave type in the current calendar year.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+              {leaveTypes.length === 0 ? (
+                <div className="text-xs text-slate-400 col-span-2 py-2 text-center">Loading leave types...</div>
+              ) : (
+                leaveTypes.map((lt) => (
+                  <div key={lt.id} className="flex items-center justify-between gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{ backgroundColor: lt.color || '#4F46E5' }}
+                      />
+                      <div className="truncate">
+                        <span className="text-xs font-semibold text-slate-800 block truncate">{lt.name}</span>
+                        <span className="text-[10px] text-slate-400">{lt.is_paid ? 'Paid Leave' : 'Unpaid LOP'}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        type="number"
+                        min="0"
+                        max="365"
+                        step="0.5"
+                        value={leaveAllocations[lt.id] ?? 0}
+                        onChange={(e) => {
+                          const val = Math.max(0, parseFloat(e.target.value) || 0);
+                          setLeaveAllocations((prev) => ({ ...prev, [lt.id]: val }));
+                        }}
+                        className="w-20 px-2 py-1 text-xs font-mono text-center font-bold text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                      <span className="text-[11px] font-medium text-slate-500">Days</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Account Setup Section (create only) */}
           {!employeeToEdit && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 pt-1">
+            <div className="space-y-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
                 <KeyRound size={15} className="text-indigo-500" />
                 <h4 className="text-sm font-semibold text-slate-800">Login Account Setup</h4>
               </div>
@@ -552,19 +655,6 @@ export default function EmployeeModal({ isOpen, onClose, onSuccess, employeeToEd
                       </button>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <label className="field-label">Salary Structure (Optional)</label>
-                  <select
-                    value={formData.salary_structure_id}
-                    onChange={e => setFormData({ ...formData, salary_structure_id: e.target.value })}
-                    className="input-field text-xs"
-                  >
-                    <option value="">— No salary structure assigned —</option>
-                    {salaryStructures.map((ss: any) => (
-                      <option key={ss.id} value={ss.id}>{ss.name} ({ss.code})</option>
-                    ))}
-                  </select>
                 </div>
               </div>
             </div>

@@ -42,10 +42,11 @@ export default function EmployeeDetailPage() {
     if (!id) return;
     try {
       await employeesApi.update(Number(id), editData);
+      toast.success('Employee profile updated successfully.');
       setIsEditing(false);
       loadEmployee();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to update employee');
+      toast.error(err.response?.data?.detail || 'Failed to update employee');
     }
   };
 

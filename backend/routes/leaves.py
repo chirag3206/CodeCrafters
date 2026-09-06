@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from dependencies import get_current_user, require_hr_manager
 from models import TimeOffType, TimeOffAllocation, TimeOffRequest, AllocationStatus, TimeOffRequestStatus, Employee, UserRole
-from schemas import TimeOffTypeOut, TimeOffAllocationOut, TimeOffRequestCreate, TimeOffRequestOut, MessageResponse
+from schemas import TimeOffTypeOut, TimeOffAllocationOut, TimeOffRequestCreate, TimeOffRequestOut, TimeOffRequestRefuse, BulkLeaveAllocationGrant, MessageResponse
 
 router = APIRouter(prefix="/api/time-off", tags=["Time Off"])
 
@@ -155,6 +155,72 @@ def refuse_allocation(allocation_id: int, db: Session = Depends(get_db)):
     return alloc
 
 
+@router.post(
+    "/allocations/grant-bulk",
+    response_model=MessageResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_hr_manager)]
+)
+def grant_bulk_allocations(
+    data: BulkLeaveAllocationGrant,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    leave_type = db.query(TimeOffType).filter(TimeOffType.id == data.leave_type_id).first()
+    if not leave_type:
+        raise HTTPException(status_code=404, detail="Leave type not found")
+
+    # Determine target employees
+    if data.employee_ids and len(data.employee_ids) > 0:
+        target_employees = db.query(Employee).filter(Employee.id.in_(data.employee_ids)).all()
+    else:
+        # All active employees
+        target_employees = db.query(Employee).filter(Employee.status == "Active").all()
+
+    if not target_employees:
+        raise HTTPException(status_code=400, detail="No matching employees found for allocation grant")
+
+    current_year = date.today().year
+    valid_from = data.valid_from or date(current_year, 1, 1)
+    valid_to = data.valid_to or date(current_year, 12, 31)
+    approver_id = current_user.employee.id if current_user.employee else None
+
+    count_updated = 0
+    for emp in target_employees:
+        existing_alloc = db.query(TimeOffAllocation).filter(
+            TimeOffAllocation.employee_id == emp.id,
+            TimeOffAllocation.leave_type_id == data.leave_type_id
+        ).first()
+
+        if existing_alloc:
+            if data.mode == "set":
+                existing_alloc.allocated_days = max(0.0, float(data.allocated_days))
+            else:  # "add"
+                existing_alloc.allocated_days = max(0.0, float(existing_alloc.allocated_days + data.allocated_days))
+            existing_alloc.status = AllocationStatus.APPROVED
+            existing_alloc.approved_by_id = approver_id
+        else:
+            new_alloc = TimeOffAllocation(
+                employee_id=emp.id,
+                leave_type_id=data.leave_type_id,
+                allocated_days=max(0.0, float(data.allocated_days)),
+                valid_from=valid_from,
+                valid_to=valid_to,
+                status=AllocationStatus.APPROVED,
+                approved_by_id=approver_id,
+            )
+            db.add(new_alloc)
+        count_updated += 1
+
+    db.commit()
+
+    action_text = "added" if data.mode == "add" else "set"
+    return MessageResponse(
+        message=f"Successfully {action_text} {data.allocated_days} days of {leave_type.name} quota for {count_updated} employee(s).",
+        success=True
+    )
+
+
 # ─── TIME OFF REQUESTS ──────────────────────────────────────────────────────
 
 @router.get("/requests", response_model=List[TimeOffRequestOut])
@@ -243,12 +309,18 @@ def approve_request(request_id: int, db: Session = Depends(get_db), current_user
 
 
 @router.put("/requests/{request_id}/refuse", response_model=TimeOffRequestOut, dependencies=[Depends(require_hr_manager)])
-def refuse_request(request_id: int, db: Session = Depends(get_db)):
+def refuse_request(
+    request_id: int,
+    data: Optional[TimeOffRequestRefuse] = None,
+    db: Session = Depends(get_db)
+):
     req = db.query(TimeOffRequest).filter(TimeOffRequest.id == request_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="Time off request not found")
 
     req.status = TimeOffRequestStatus.REFUSED
+    if data and data.rejection_reason:
+        req.rejection_reason = data.rejection_reason
     db.commit()
     db.refresh(req)
     return req

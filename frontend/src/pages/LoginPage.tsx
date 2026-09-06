@@ -136,29 +136,7 @@ export default function LoginPage() {
             </div>
           </form>
 
-          {/* Role hints */}
-          <div className="mt-5 p-3 rounded-xl bg-slate-50 border border-slate-200">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">System Roles</p>
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { label: 'Admin', color: '#7c3aed' },
-                { label: 'HR Manager', color: '#0369a1' },
-                { label: 'Payroll Manager', color: '#047857' },
-                { label: 'Payroll User', color: '#b45309' },
-                { label: 'Employee', color: '#be123c' },
-              ].map(r => (
-                <span
-                  key={r.label}
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
-                  style={{ color: r.color, borderColor: r.color + '50', backgroundColor: r.color + '12' }}
-                >
-                  {r.label}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-5 pt-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
             <span>Secure 256-bit SSL Session</span>
             <span>v2.4 Enterprise</span>
           </div>

@@ -405,6 +405,7 @@ class TimeOffRequest(Base):
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     duration_days: Mapped[float] = mapped_column(Float, nullable=False)
     reason: Mapped[Optional[str]] = mapped_column(Text)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[TimeOffRequestStatus] = mapped_column(Enum(TimeOffRequestStatus), default=TimeOffRequestStatus.DRAFT)
     approved_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("employees.id"))
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime)

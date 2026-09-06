@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from auth import hash_password
 from database import Base, SessionLocal, engine
 from models import (
-    Attendance, AttendanceStatus, AllocationStatus, ComputationType,
+    Attendance, AttendanceStatus, AttendancePeriodLock, AllocationStatus, ComputationType,
     Contract, ContractStatus, Department, EmailOutbox, EmailStatus,
     Employee, EmployeeStatus, EmploymentType, JobPosition, LeaveUnit,
     OfficeHoursNotification, Payrun, PayrunStatus, Payslip, PayslipLine,
@@ -386,9 +386,10 @@ def seed():
                 ))
         db.flush()
 
-        # ─── 8. Time Off Requests (Last 6 Months) ─────────────────────────
-        print("🏝️ Seeding time-off requests across last 6 months (March - Sep 2026)…")
+        # ─── 8. Time Off Requests (January - September 2026) ─────────────────────────
+        print("🏝️ Seeding realistic time-off requests with high leave volume in June & August 2026…")
         aarav_emp  = created_employees[0]
+        priya_emp  = created_employees[1]
         rajesh_emp = created_employees[2]
         sunita_emp = created_employees[3]
         kabir_emp  = created_employees[5]
@@ -400,47 +401,53 @@ def seed():
         sameer_emp = created_employees[11]
 
         leave_specs = [
+            # January 2026
+            (aarav_emp.id,  casual_leave, date(2026, 1, 15), date(2026, 1, 16), 2.0, "New year family event", TimeOffRequestStatus.APPROVED),
+            (priya_emp.id,  sick_leave,   date(2026, 1, 22), date(2026, 1, 22), 1.0, "Seasonal flu & recovery", TimeOffRequestStatus.APPROVED),
+            # February 2026
+            (rajesh_emp.id, sick_leave,   date(2026, 2, 10), date(2026, 2, 10), 1.0, "Dental procedure & rest", TimeOffRequestStatus.APPROVED),
+            (ananya_emp.id, casual_leave, date(2026, 2, 19), date(2026, 2, 20), 2.0, "Personal errands", TimeOffRequestStatus.APPROVED),
             # March 2026
-            (aarav_emp.id,  casual_leave, date(2026, 3, 12), date(2026, 3, 13), 2.0, "Personal errands & family event", TimeOffRequestStatus.APPROVED),
-            (priya_emp.id,  sick_leave,   date(2026, 3, 25), date(2026, 3, 25), 1.0, "Viral fever & recovery", TimeOffRequestStatus.APPROVED),
-            (rahul_emp.id,  casual_leave, date(2026, 3, 30), date(2026, 3, 30), 1.0, "Bank and documentation work", TimeOffRequestStatus.APPROVED),
-            (ritu_emp.id,   casual_leave, date(2026, 3, 5),  date(2026, 3, 5),  1.0, "Family function", TimeOffRequestStatus.APPROVED),
+            (kabir_emp.id,  annual_leave, date(2026, 3, 9),  date(2026, 3, 11), 3.0, "Spring break vacation", TimeOffRequestStatus.APPROVED),
+            (sunita_emp.id, casual_leave, date(2026, 3, 18), date(2026, 3, 18), 1.0, "Bank and documentation work", TimeOffRequestStatus.APPROVED),
+            (divya_emp.id,  unpaid_leave, date(2026, 3, 25), date(2026, 3, 25), 1.0, "Personal emergency (Unpaid LOP)", TimeOffRequestStatus.APPROVED),
             # April 2026
-            (rajesh_emp.id, annual_leave, date(2026, 4, 16), date(2026, 4, 17), 2.0, "Family trip to hill station", TimeOffRequestStatus.APPROVED),
-            (divya_emp.id,  sick_leave,   date(2026, 4, 28), date(2026, 4, 28), 1.0, "Dentist appointment", TimeOffRequestStatus.APPROVED),
-            (sunita_emp.id, sick_leave,   date(2026, 4, 8),  date(2026, 4, 8),  1.0, "Migraine & rest", TimeOffRequestStatus.APPROVED),
-            (sameer_emp.id, sick_leave,   date(2026, 4, 2),  date(2026, 4, 2),  1.0, "Seasonal flu", TimeOffRequestStatus.APPROVED),
+            (rahul_emp.id,  annual_leave, date(2026, 4, 14), date(2026, 4, 16), 3.0, "Family trip to hill station", TimeOffRequestStatus.APPROVED),
+            (ritu_emp.id,   sick_leave,   date(2026, 4, 22), date(2026, 4, 22), 1.0, "Migraine & rest", TimeOffRequestStatus.APPROVED),
             # May 2026
-            (ananya_emp.id, annual_leave, date(2026, 5, 11), date(2026, 5, 13), 3.0, "Sister's wedding ceremony", TimeOffRequestStatus.APPROVED),
-            (sunita_emp.id, casual_leave, date(2026, 5, 21), date(2026, 5, 21), 1.0, "Personal work", TimeOffRequestStatus.APPROVED),
-            (aarav_emp.id,  sick_leave,   date(2026, 5, 4),  date(2026, 5, 4),  1.0, "Food poisoning recovery", TimeOffRequestStatus.APPROVED),
-            (kabir_emp.id,  annual_leave, date(2026, 5, 27), date(2026, 5, 28), 2.0, "Summer holiday", TimeOffRequestStatus.APPROVED),
-            (rohan_emp.id,  casual_leave, date(2026, 5, 7),  date(2026, 5, 8),  2.0, "House relocation", TimeOffRequestStatus.APPROVED),
-            # June 2026
-            (rahul_emp.id,  annual_leave, date(2026, 6, 8),  date(2026, 6, 9),  2.0, "Family vacation", TimeOffRequestStatus.APPROVED),
-            (kabir_emp.id,  unpaid_leave, date(2026, 6, 24), date(2026, 6, 24), 1.0, "Urgent non-medical personal matter", TimeOffRequestStatus.APPROVED),
-            (priya_emp.id,  annual_leave, date(2026, 6, 18), date(2026, 6, 19), 2.0, "Short wellness retreat", TimeOffRequestStatus.APPROVED),
+            (sameer_emp.id, casual_leave, date(2026, 5, 6),  date(2026, 5, 7),  2.0, "Home maintenance", TimeOffRequestStatus.APPROVED),
+            (ananya_emp.id, annual_leave, date(2026, 5, 18), date(2026, 5, 20), 3.0, "Sister's wedding ceremony", TimeOffRequestStatus.APPROVED),
+            (rohan_emp.id,  unpaid_leave, date(2026, 5, 28), date(2026, 5, 28), 1.0, "Extended personal absence (Unpaid LOP)", TimeOffRequestStatus.APPROVED),
+
+            # 🌟 JUNE 2026 (PEAK LEAVE & LOP MONTH — HISTORICAL PAID PAYROLL) 🌟
+            (aarav_emp.id,  annual_leave, date(2026, 6, 8),  date(2026, 6, 12), 5.0, "Summer family vacation in Himachal", TimeOffRequestStatus.APPROVED),
+            (kabir_emp.id,  unpaid_leave, date(2026, 6, 17), date(2026, 6, 19), 3.0, "Emergency home repairs (Unpaid LOP)", TimeOffRequestStatus.APPROVED),
+            (divya_emp.id,  sick_leave,   date(2026, 6, 22), date(2026, 6, 23), 2.0, "Severe fever & hospital checkup", TimeOffRequestStatus.APPROVED),
+            (rajesh_emp.id, casual_leave, date(2026, 6, 4),  date(2026, 6, 5),  2.0, "Family function", TimeOffRequestStatus.APPROVED),
+            (rahul_emp.id,  unpaid_leave, date(2026, 6, 29), date(2026, 6, 30), 2.0, "Unplanned personal work (Unpaid LOP)", TimeOffRequestStatus.APPROVED),
+            (priya_emp.id,  annual_leave, date(2026, 6, 15), date(2026, 6, 16), 2.0, "Short wellness retreat", TimeOffRequestStatus.APPROVED),
             (sameer_emp.id, casual_leave, date(2026, 6, 2),  date(2026, 6, 3),  2.0, "Domestic travel", TimeOffRequestStatus.APPROVED),
-            (divya_emp.id,  casual_leave, date(2026, 6, 15), date(2026, 6, 15), 1.0, "Personal errands", TimeOffRequestStatus.APPROVED),
+
             # July 2026
-            (rohan_emp.id,  annual_leave, date(2026, 7, 14), date(2026, 7, 16), 3.0, "Monsoon trekking trip", TimeOffRequestStatus.APPROVED),
+            (rohan_emp.id,  annual_leave, date(2026, 7, 13), date(2026, 7, 15), 3.0, "Monsoon trekking trip", TimeOffRequestStatus.APPROVED),
             (ritu_emp.id,   sick_leave,   date(2026, 7, 27), date(2026, 7, 27), 1.0, "Medical consultation", TimeOffRequestStatus.APPROVED),
-            (aarav_emp.id,  annual_leave, date(2026, 7, 9),  date(2026, 7, 10), 2.0, "Annual family leave", TimeOffRequestStatus.APPROVED),
-            (rajesh_emp.id, casual_leave, date(2026, 7, 23), date(2026, 7, 23), 1.0, "Vehicle registration appointment", TimeOffRequestStatus.APPROVED),
-            (rahul_emp.id,  sick_leave,   date(2026, 7, 31), date(2026, 7, 31), 1.0, "Allergy treatment", TimeOffRequestStatus.APPROVED),
-            # August 2026
-            (sameer_emp.id, annual_leave, date(2026, 8, 10), date(2026, 8, 12), 3.0, "Annual holiday", TimeOffRequestStatus.APPROVED),
-            (priya_emp.id,  casual_leave, date(2026, 8, 7),  date(2026, 8, 7),  1.0, "Personal leave", TimeOffRequestStatus.APPROVED),
-            (sunita_emp.id, annual_leave, date(2026, 8, 18), date(2026, 8, 19), 2.0, "Family gathering", TimeOffRequestStatus.APPROVED),
-            (aarav_emp.id,  unpaid_leave, date(2026, 8, 28), date(2026, 8, 28), 1.0, "Emergency personal legal work", TimeOffRequestStatus.APPROVED),
-            (divya_emp.id,  annual_leave, date(2026, 8, 3),  date(2026, 8, 4),  2.0, "Short weekend getaway", TimeOffRequestStatus.APPROVED),
-            (kabir_emp.id,  casual_leave, date(2026, 8, 24), date(2026, 8, 24), 1.0, "Passport renewal appointment", TimeOffRequestStatus.APPROVED),
-            (ritu_emp.id,   annual_leave, date(2026, 8, 20), date(2026, 8, 20), 1.0, "Family event", TimeOffRequestStatus.APPROVED),
-            # September 2026
-            (aarav_emp.id,  annual_leave, date(2026, 9, 2),  date(2026, 9, 2),  1.0, "Personal work", TimeOffRequestStatus.APPROVED),
+            (sunita_emp.id, casual_leave, date(2026, 7, 29), date(2026, 7, 29), 1.0, "Personal work", TimeOffRequestStatus.APPROVED),
+
+            # 🌟 AUGUST 2026 (PEAK LEAVE & LOP MONTH — OPEN FOR WIZARD TESTING) 🌟
+            (sameer_emp.id, annual_leave, date(2026, 8, 10), date(2026, 8, 14), 5.0, "Annual monsoon holiday", TimeOffRequestStatus.APPROVED),
+            (aarav_emp.id,  unpaid_leave, date(2026, 8, 24), date(2026, 8, 26), 3.0, "Urgent legal & property matter (Unpaid LOP)", TimeOffRequestStatus.APPROVED),
+            (ananya_emp.id, sick_leave,   date(2026, 8, 17), date(2026, 8, 18), 2.0, "Severe throat infection", TimeOffRequestStatus.APPROVED),
+            (kabir_emp.id,  unpaid_leave, date(2026, 8, 5),  date(2026, 8, 6),  2.0, "Unapproved extension of weekend (Unpaid LOP)", TimeOffRequestStatus.APPROVED),
+            (divya_emp.id,  annual_leave, date(2026, 8, 3),  date(2026, 8, 4),  2.0, "Short weekend trip", TimeOffRequestStatus.APPROVED),
+            (ritu_emp.id,   casual_leave, date(2026, 8, 20), date(2026, 8, 21), 2.0, "Family function", TimeOffRequestStatus.APPROVED),
+            (rajesh_emp.id, unpaid_leave, date(2026, 8, 28), date(2026, 8, 28), 1.0, "Personal emergency (Unpaid LOP)", TimeOffRequestStatus.APPROVED),
+
+            # September 2026 (Current Month)
+            (aarav_emp.id,  casual_leave, date(2026, 9, 2),  date(2026, 9, 2),  1.0, "Personal work", TimeOffRequestStatus.APPROVED),
             # Pending Requests in queue for testing HR workflow
-            (ananya_emp.id, annual_leave, date(2026, 9, 16), date(2026, 9, 18), 3.0, "Upcoming vacation with parents", TimeOffRequestStatus.SUBMITTED),
-            (rohan_emp.id,  casual_leave, date(2026, 9, 23), date(2026, 9, 23), 1.0, "Doctor follow-up checkup", TimeOffRequestStatus.SUBMITTED),
+            (ananya_emp.id, annual_leave, date(2026, 9, 14), date(2026, 9, 16), 3.0, "Upcoming vacation with parents", TimeOffRequestStatus.SUBMITTED),
+            (rohan_emp.id,  casual_leave, date(2026, 9, 21), date(2026, 9, 22), 2.0, "Doctor consultation & checkup", TimeOffRequestStatus.SUBMITTED),
+            (divya_emp.id,  sick_leave,   date(2026, 9, 8),  date(2026, 9, 8),  1.0, "Scheduled health checkup", TimeOffRequestStatus.SUBMITTED),
         ]
 
         employee_leave_dates = {}
@@ -465,19 +472,18 @@ def seed():
                     cur_d += timedelta(days=1)
         db.flush()
 
-        # ─── 9. Attendance Records (March 1 - Sep 4, 2026: Mon-Fri Only) ──
-        print("⏱️ Seeding 6 months of attendance records (Mon-Fri only, weekends OFF)…")
-        # Today is Saturday, September 5, 2026 -> NEVER generate attendance for Sep 5+ in seed!
+        # ─── 9. Attendance Records (Jan 1 - Sep 5, 2026: Mon-Fri Only) ──
+        print("⏱️ Seeding attendance records from January 1, 2026 to September 5, 2026 (Mon-Fri only)…")
         attendance_business_days = []
-        cur_day = date(2026, 3, 1)
-        end_seed_day = date(2026, 9, 4)
+        cur_day = date(2026, 1, 1)
+        end_seed_day = date(2026, 9, 5)  # Yesterday (Sep 5, 2026)
 
         while cur_day <= end_seed_day:
             if cur_day.weekday() < 5:  # Monday=0, ..., Friday=4. Saturday & Sunday are strictly OFF!
                 attendance_business_days.append(cur_day)
             cur_day += timedelta(days=1)
 
-        print(f"  → Found {len(attendance_business_days)} standard business days across the 6-month period.")
+        print(f"  → Found {len(attendance_business_days)} standard business days across Jan - Sep 5, 2026.")
 
         total_attendance_seeded = 0
         for emp in created_employees:
@@ -490,25 +496,20 @@ def seed():
                 if random.random() < 0.02 and day < date(2026, 9, 1):
                     continue
 
-                # Realistic punch parameters
                 rand_val = random.random()
                 if rand_val < 0.07:
-                    # Late arrival (09:16 - 09:36)
                     late_mins = random.randint(16, 36)
                     check_in = datetime(day.year, day.month, day.day, 9, late_mins, random.randint(10, 50))
                     status = AttendanceStatus.LATE
                 elif rand_val < 0.20:
-                    # Grace window arrival (09:01 - 09:12) -> PRESENT
                     grace_mins = random.randint(1, 12)
                     check_in = datetime(day.year, day.month, day.day, 9, grace_mins, random.randint(10, 50))
                     status = AttendanceStatus.PRESENT
                 else:
-                    # Early/punctual arrival (08:45 - 08:59) -> PRESENT
                     early_mins = random.randint(45, 59)
                     check_in = datetime(day.year, day.month, day.day, 8, early_mins, random.randint(10, 50))
                     status = AttendanceStatus.PRESENT
 
-                # Missing checkout check (1% chance)
                 is_missing = random.random() < 0.01 and day < date(2026, 9, 1)
                 if is_missing:
                     check_out = None
@@ -516,8 +517,6 @@ def seed():
                     overtime_hours = 0.0
                     status = AttendanceStatus.MISSING_CHECKOUT
                 else:
-                    # Realistic checkout
-                    # 15% overtime shift (18:45 - 19:35), 85% normal departure (18:00 - 18:25)
                     if random.random() < 0.15:
                         ot_mins = random.randint(45, 95)
                         check_out = datetime(day.year, day.month, day.day, 18, 0, 0) + timedelta(minutes=ot_mins)
@@ -529,7 +528,6 @@ def seed():
                     worked_hours = round(max(0.0, gross_duration - 1.0), 2)  # 1 hour lunch break
                     overtime_hours = round(max(0.0, worked_hours - 8.0), 2)
 
-                # Occasional audited manual correction (1%)
                 is_manual = False
                 corr_note = None
                 corr_by = None
@@ -562,18 +560,20 @@ def seed():
         db.flush()
         print(f"  → Successfully seeded {total_attendance_seeded} realistic attendance punch logs.")
 
-        # ─── 10. Completed Payruns STRICTLY BEFORE August 2026 (March - July) ─
-        print("💵 Seeding completed payroll batches & payslips for months BEFORE August 2026 (March - July)…")
-        # Per user requirement: only create payroll BEFORE August so the user can test August & September with the wizard!
-        pre_august_months = [
+        # ─── 10. Completed Payruns STRICTLY TILL JUNE 2026 (January - June 2026) ─
+        print("💵 Seeding completed payroll batches & payslips STRICTLY for months January to June 2026…")
+        # Per user requirement: payslips generated only till June 2026!
+        # July, August & September 2026 remain OPEN & UNPROCESSED for hands-on user testing in the wizard.
+        completed_months = [
+            (1, 31, "January 2026"),
+            (2, 28, "February 2026"),
             (3, 31, "March 2026"),
             (4, 30, "April 2026"),
             (5, 31, "May 2026"),
             (6, 30, "June 2026"),
-            (7, 31, "July 2026"),
         ]
 
-        for m_num, m_last_day, m_name in pre_august_months:
+        for m_num, m_last_day, m_name in completed_months:
             p_start = date(2026, m_num, 1)
             p_end = date(2026, m_num, m_last_day)
             ref = f"PAY/2026/{m_num:02d}/001"
@@ -594,6 +594,15 @@ def seed():
                 paid_at=datetime(2026, m_num, m_last_day, 17, 30, 0),
             )
             db.add(payrun)
+
+            db.add(AttendancePeriodLock(
+                month=f"2026-{m_num:02d}",
+                is_locked=True,
+                locked_at=datetime(2026, m_num, m_last_day, 14, 0, 0),
+                locked_by_id=priya_emp.id if priya_emp else sunita_emp.id,
+                approval_notes=f"Attendance audited, verified and locked prior to {m_name} payroll execution.",
+            ))
+
             db.flush()
 
             sched_days = _count_business_days(p_start, p_end)
@@ -604,7 +613,6 @@ def seed():
             for emp in created_employees:
                 contract = next((c for c in created_contracts if c.employee_id == emp.id and c.status == ContractStatus.ACTIVE), created_contracts[0])
 
-                # Count attendances in period
                 att_records = db.query(Attendance).filter(
                     Attendance.employee_id == emp.id,
                     Attendance.date >= p_start,
@@ -614,7 +622,6 @@ def seed():
                 worked_days = float(len(att_records))
                 ot_hours = round(sum(a.overtime_hours for a in att_records), 2)
 
-                # Leaves in period
                 emp_leaves = db.query(TimeOffRequest).filter(
                     TimeOffRequest.employee_id == emp.id,
                     TimeOffRequest.start_date <= p_end,
@@ -630,7 +637,6 @@ def seed():
                     else:
                         unpaid_leaves += lr.duration_days
 
-                # Compute exact payslip via mathematical rule engine
                 struct_rules = db.query(SalaryRule).filter(
                     SalaryRule.structure_id == contract.salary_structure_id,
                     SalaryRule.is_active == True,
@@ -666,7 +672,6 @@ def seed():
                 db.add(payslip)
                 db.flush()
 
-                # Add sequenced breakdown lines
                 for line_data in lines:
                     db.add(PayslipLine(
                         payslip_id=payslip.id,
@@ -678,7 +683,6 @@ def seed():
                         amount=line_data["amount"],
                     ))
 
-                # Add payslip dispatch notification email in Outbox
                 db.add(EmailOutbox(
                     payslip_id=payslip.id,
                     payrun_id=payrun.id,
@@ -710,8 +714,8 @@ def seed():
             payrun.total_net = round(pr_net, 2)
             db.flush()
 
-        print("  → Seeded 5 monthly payruns (March - July 2026) with 60 itemized payslips & email dispatches.")
-        print("  → August 2026 & September 2026 remain OPEN for user testing in the Payroll Wizard!")
+        print("  → Seeded 6 monthly payruns (January - June 2026) with 72 itemized payslips & email dispatches.")
+        print("  → July, August & September 2026 remain OPEN for user testing in the Payroll Wizard!")
 
         # ─── 11. Office Hours 3-Day Broadcast Notification ────────────────
         print("📢 Seeding company broadcast alert notification…")
@@ -731,7 +735,7 @@ def seed():
         ))
 
         db.commit()
-        print("\n✅ SEED COMPLETE! Pre-August historical payroll & realistic Indian corporate salaries configured.")
+        print("\n✅ SEED COMPLETE! Real January - September 2026 data & June/August peak leaves configured.")
         print("\n📋 Demo Personas (All Passwords: demo1234):")
         print("  👤 aarav.sharma@peoplepay360.com  — Senior Frontend Engineer (₹65,000/mo)")
         print("  👔 priya.nair@peoplepay360.com    — HR Manager (₹55,000/mo)")

@@ -25,6 +25,7 @@ interface Candidate {
 
 export default function PayrollPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [payruns, setPayruns] = useState<Payrun[]>([]);
   const [structures, setStructures] = useState<SalaryStructure[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -101,7 +102,7 @@ export default function PayrollPage() {
       // Default select all candidates
       setSelectedIds(res.data.map((c: Candidate) => c.employee_id));
     } catch (err: any) {
-      alert(formatErrorMessage(err, 'Failed to load eligible candidates'));
+      toast.error(formatErrorMessage(err, 'Failed to load eligible candidates'));
       setWizardStep(1);
     } finally {
       setIsLoadingCandidates(false);
@@ -124,7 +125,7 @@ export default function PayrollPage() {
 
   const handleCreateBatch = async () => {
     if (selectedIds.length === 0) {
-      alert('Please select at least one employee for the payrun batch.');
+      toast.error('Please select at least one employee for the payrun batch.');
       return;
     }
     try {
@@ -137,12 +138,13 @@ export default function PayrollPage() {
         },
         selected_employee_ids: selectedIds,
       });
+      toast.success('Payrun batch created and submitted for approval!');
       setIsWizardOpen(false);
       setWizardStep(1);
       // Navigate to Payrun Control Center
       navigate(`/payroll/${res.data.id}`);
     } catch (err: any) {
-      alert(formatErrorMessage(err, 'Failed to create payrun batch'));
+      toast.error(formatErrorMessage(err, 'Failed to create payrun batch'));
     } finally {
       setIsCreatingBatch(false);
     }

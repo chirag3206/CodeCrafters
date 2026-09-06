@@ -81,6 +81,9 @@ export interface Employee {
   ifsc_swift: string | null;
   avatar_initials: string | null;
   avatar_color: string | null;
+  user_id?: number | null;
+  has_user_account?: boolean;
+  system_role?: UserRole | null;
   created_at: string;
   department: Department | null;
   job_position: JobPosition | null;
@@ -185,6 +188,7 @@ export interface TimeOffRequest {
   end_date: string;
   duration_days: number;
   reason: string | null;
+  rejection_reason?: string | null;
   status: 'Draft' | 'Submitted' | 'Approved' | 'Refused';
   approved_at: string | null;
   created_at: string;

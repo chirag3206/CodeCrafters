@@ -120,6 +120,7 @@ def list_employees(
         emp_out = EmployeeOut.model_validate(emp)
         emp_out.has_user_account = emp.user is not None
         emp_out.user_id = emp.user.id if emp.user else None
+        emp_out.system_role = emp.user.role if emp.user else None
         emp_out.smart_buttons = _get_smart_buttons(db, emp.id)
         result.append(emp_out)
 
@@ -145,6 +146,7 @@ def get_employee(
     emp_out = EmployeeOut.model_validate(emp)
     emp_out.has_user_account = emp.user is not None
     emp_out.user_id = emp.user.id if emp.user else None
+    emp_out.system_role = emp.user.role if emp.user else None
     emp_out.smart_buttons = _get_smart_buttons(db, emp.id)
     return emp_out
 
@@ -152,6 +154,83 @@ def get_employee(
 def _generate_temp_password(length: int = 12) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#$%"
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def ensure_all_users_have_employee_and_contract(db: Session):
+    """
+    Ensures every User has a linked Employee profile, and every Employee (including HR Managers and Admins)
+    has an active Contract and default leave allocations so everyone is payroll-ready.
+    """
+    std_struct = db.query(SalaryStructure).first()
+    std_schedule = db.query(WorkingSchedule).first()
+    users = db.query(User).all()
+
+    for user in users:
+        emp = user.employee
+        if not emp:
+            emp = db.query(Employee).filter(Employee.work_email == user.email).first()
+            if emp:
+                emp.user_id = user.id
+            else:
+                name_parts = user.email.split("@")[0].replace(".", " ").replace("_", " ").title().split()
+                first = name_parts[0] if name_parts else "User"
+                last = name_parts[1] if len(name_parts) > 1 else str(user.id)
+                badge = f"EMP-{user.id:03d}"
+
+                emp = Employee(
+                    user_id=user.id,
+                    badge_id=badge,
+                    first_name=first,
+                    last_name=last,
+                    work_email=user.email,
+                    employment_type=EmploymentType.FULL_TIME,
+                    status=EmployeeStatus.ACTIVE,
+                    hire_date=date(2026, 1, 1),
+                    working_schedule_id=std_schedule.id if std_schedule else None,
+                    avatar_initials=f"{first[0].upper()}{last[0].upper()}",
+                    avatar_color="#4F46E5",
+                )
+                db.add(emp)
+                db.flush()
+
+    all_employees = db.query(Employee).all()
+    current_year = date.today().year
+
+    for emp in all_employees:
+        active_contract = db.query(Contract).filter(
+            Contract.employee_id == emp.id,
+            Contract.status.in_([ContractStatus.ACTIVE, ContractStatus.EXPIRED])
+        ).first()
+
+        if not active_contract:
+            c = Contract(
+                reference=f"CNT-{current_year}-{(emp.first_name or 'EMP').upper()}-{emp.id:02d}",
+                employee_id=emp.id,
+                salary_structure_id=std_struct.id if std_struct else 1,
+                working_schedule_id=emp.working_schedule_id or (std_schedule.id if std_schedule else None),
+                wage=55000.0,
+                start_date=emp.hire_date or date(2026, 1, 1),
+                end_date=None,
+                status=ContractStatus.ACTIVE,
+            )
+            db.add(c)
+
+        alloc_count = db.query(func.count(TimeOffAllocation.id)).filter(TimeOffAllocation.employee_id == emp.id).scalar() or 0
+        if alloc_count == 0:
+            all_types = db.query(TimeOffType).all()
+            for lt in all_types:
+                default_days = lt.max_days_per_year if lt.max_days_per_year is not None else 10.0
+                alloc = TimeOffAllocation(
+                    employee_id=emp.id,
+                    leave_type_id=lt.id,
+                    allocated_days=default_days,
+                    valid_from=date(current_year, 1, 1),
+                    valid_to=date(current_year, 12, 31),
+                    status=AllocationStatus.APPROVED,
+                )
+                db.add(alloc)
+
+    db.commit()
 
 
 @router.post(
@@ -168,7 +247,6 @@ def create_employee(
     if existing:
         raise HTTPException(status_code=400, detail="Employee with this email already exists")
 
-    # Check if work_email is already a user account
     existing_user = db.query(User).filter(User.email == data.work_email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="A user account with this email already exists.")
@@ -177,10 +255,8 @@ def create_employee(
     avatar_initials = f"{data.first_name[0].upper()}{data.last_name[0].upper()}"
     avatar_color = AVATAR_COLORS[len(full_name) % len(AVATAR_COLORS)]
 
-    # Determine badge_id: use supplied badge_id or auto-generate
     custom_badge = (data.badge_id or "").strip()
     if custom_badge:
-        # Normalize: strip spaces like 'EMP - 014' -> 'EMP-014', ensure 'EMP-' prefix
         cleaned = re.sub(r"^EMP\s*-\s*", "", custom_badge, flags=re.IGNORECASE).strip()
         badge_id = f"EMP-{cleaned.upper()}"
         existing_badge = db.query(Employee).filter(Employee.badge_id == badge_id).first()
@@ -190,33 +266,80 @@ def create_employee(
         max_id = db.query(Employee).count()
         badge_id = f"EMP-{max_id + 1:03d}"
 
-    # Validate salary structure if provided
     salary_structure_id = data.salary_structure_id
     if salary_structure_id:
         ss = db.query(SalaryStructure).filter(SalaryStructure.id == salary_structure_id).first()
         if not ss:
             raise HTTPException(status_code=400, detail="Salary structure not found.")
 
-    # Build employee dict — exclude our extra non-model fields
-    emp_data = data.model_dump(exclude={"initial_password", "salary_structure_id"})
+    emp_data = data.model_dump(exclude={"initial_password", "salary_structure_id", "contract_wage", "system_role", "leave_allocations"})
     emp_data["badge_id"] = badge_id
     emp_data["avatar_initials"] = avatar_initials
     emp_data["avatar_color"] = avatar_color
 
     emp = Employee(**emp_data)
     db.add(emp)
-    db.flush()  # get emp.id without committing
+    db.flush()
 
-    # Auto-create a User login account for this employee
+    current_year = date.today().year
+
+    # Auto-create active employment contract
+    default_wage = data.contract_wage or 55000.0
+    struct_id = salary_structure_id
+    if not struct_id:
+        std_st = db.query(SalaryStructure).first()
+        struct_id = std_st.id if std_st else 1
+
+    new_contract = Contract(
+        reference=f"CNT-{current_year}-{badge_id}",
+        employee_id=emp.id,
+        salary_structure_id=struct_id,
+        working_schedule_id=emp.working_schedule_id,
+        wage=default_wage,
+        start_date=emp.hire_date or date(current_year, 1, 1),
+        end_date=None,
+        status=ContractStatus.ACTIVE,
+    )
+    db.add(new_contract)
+
+    # Create Time Off Allocations for calendar year
+    from models import TimeOffType, TimeOffAllocation, AllocationStatus
+    if data.leave_allocations:
+        for alloc_item in data.leave_allocations:
+            alloc = TimeOffAllocation(
+                employee_id=emp.id,
+                leave_type_id=alloc_item.leave_type_id,
+                allocated_days=alloc_item.allocated_days,
+                valid_from=date(current_year, 1, 1),
+                valid_to=date(current_year, 12, 31),
+                status=AllocationStatus.APPROVED,
+            )
+            db.add(alloc)
+    else:
+        all_types = db.query(TimeOffType).all()
+        for lt in all_types:
+            default_days = lt.max_days_per_year if lt.max_days_per_year is not None else 10.0
+            alloc = TimeOffAllocation(
+                employee_id=emp.id,
+                leave_type_id=lt.id,
+                allocated_days=default_days,
+                valid_from=date(current_year, 1, 1),
+                valid_to=date(current_year, 12, 31),
+                status=AllocationStatus.APPROVED,
+            )
+            db.add(alloc)
+
+    # Auto-create a User login account with selected system_role
+    chosen_role = data.system_role or UserRole.EMPLOYEE
     plain_password = data.initial_password or _generate_temp_password()
     new_user = User(
         email=data.work_email,
         hashed_password=hash_password(plain_password),
-        role=UserRole.EMPLOYEE,
+        role=chosen_role,
         is_active=True,
     )
     db.add(new_user)
-    db.flush()  # get new_user.id
+    db.flush()
 
     emp.user_id = new_user.id
 
@@ -226,9 +349,8 @@ def create_employee(
     emp_out = EmployeeOut.model_validate(emp)
     emp_out.has_user_account = True
     emp_out.user_id = new_user.id
+    emp_out.system_role = new_user.role
     emp_out.smart_buttons = _get_smart_buttons(db, emp.id)
-    # Stash the plain password on the object so the response can relay it ONCE
-    # (We add it as an extra field via model_extra — frontend reads it)
     emp_out_dict = emp_out.model_dump()
     emp_out_dict["temp_password"] = plain_password
     return emp_out_dict
@@ -248,17 +370,43 @@ def update_employee(
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    update_dict = data.model_dump(exclude_unset=True)
+    update_dict = data.model_dump(exclude_unset=True, exclude={"leave_allocations", "system_role"})
     for k, v in update_dict.items():
         setattr(emp, k, v)
 
-    # Re-compute avatar initials if name changed
+    if data.system_role is not None and emp.user:
+        emp.user.role = data.system_role
+
     emp.avatar_initials = f"{emp.first_name[0].upper()}{emp.last_name[0].upper()}"
+
+    if data.leave_allocations is not None:
+        from models import TimeOffAllocation, AllocationStatus
+        current_year = date.today().year
+        for alloc_item in data.leave_allocations:
+            alloc = db.query(TimeOffAllocation).filter(
+                TimeOffAllocation.employee_id == emp.id,
+                TimeOffAllocation.leave_type_id == alloc_item.leave_type_id
+            ).first()
+            if alloc:
+                alloc.allocated_days = alloc_item.allocated_days
+            else:
+                alloc = TimeOffAllocation(
+                    employee_id=emp.id,
+                    leave_type_id=alloc_item.leave_type_id,
+                    allocated_days=alloc_item.allocated_days,
+                    valid_from=date(current_year, 1, 1),
+                    valid_to=date(current_year, 12, 31),
+                    status=AllocationStatus.APPROVED,
+                )
+                db.add(alloc)
 
     db.commit()
     db.refresh(emp)
 
     emp_out = EmployeeOut.model_validate(emp)
+    emp_out.has_user_account = emp.user is not None
+    emp_out.user_id = emp.user.id if emp.user else None
+    emp_out.system_role = emp.user.role if emp.user else None
     emp_out.smart_buttons = _get_smart_buttons(db, emp.id)
     return emp_out
 

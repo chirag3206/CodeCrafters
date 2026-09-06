@@ -28,6 +28,17 @@ PERSONA_MAP = {
     "rajesh": "rajesh.kumar@peoplepay360.com",
     "sunita": "sunita.rao@peoplepay360.com",
     "amit":   "amit.verma@peoplepay360.com",
+    # Role & Keyword Aliases
+    "employee":     "aarav.sharma@peoplepay360.com",
+    "hr":           "priya.nair@peoplepay360.com",
+    "hr_manager":   "priya.nair@peoplepay360.com",
+    "payroll":      "rajesh.kumar@peoplepay360.com",
+    "payroll_user": "rajesh.kumar@peoplepay360.com",
+    "parol":        "rajesh.kumar@peoplepay360.com",
+    "parol_user":   "rajesh.kumar@peoplepay360.com",
+    "payroll_mgr":  "sunita.rao@peoplepay360.com",
+    "pay_manager":  "sunita.rao@peoplepay360.com",
+    "admin":        "amit.verma@peoplepay360.com",
     # Legacy aliases
     "alex":   "aarav.sharma@peoplepay360.com",
     "sarah":  "priya.nair@peoplepay360.com",
@@ -233,9 +244,63 @@ def create_user(
     db.add(new_user)
     db.flush()  # get new_user.id
 
-    # Link to employee record if provided
+    # Link to employee record if provided, otherwise auto-create employee & contract
     if employee:
         employee.user_id = new_user.id
+    else:
+        from datetime import date
+        from models import Contract, ContractStatus, SalaryStructure, WorkingSchedule, EmploymentType, EmployeeStatus, TimeOffType, TimeOffAllocation, AllocationStatus
+        std_struct = db.query(SalaryStructure).first()
+        std_schedule = db.query(WorkingSchedule).first()
+        current_year = date.today().year
+
+        name_parts = (request.full_name or request.email.split("@")[0]).strip().split()
+        first_name = name_parts[0] if name_parts else "User"
+        last_name = name_parts[1] if len(name_parts) > 1 else str(new_user.id)
+        badge_id = f"EMP-{new_user.id:03d}"
+
+        new_emp = Employee(
+            user_id=new_user.id,
+            badge_id=badge_id,
+            first_name=first_name,
+            last_name=last_name,
+            work_email=request.email,
+            employment_type=EmploymentType.FULL_TIME,
+            status=EmployeeStatus.ACTIVE,
+            hire_date=date(current_year, 1, 1),
+            working_schedule_id=std_schedule.id if std_schedule else None,
+            avatar_initials=f"{first_name[0].upper()}{last_name[0].upper()}",
+            avatar_color="#4F46E5",
+        )
+        db.add(new_emp)
+        db.flush()
+
+        # Create active contract
+        new_contract = Contract(
+            reference=f"CNT-{current_year}-{badge_id}",
+            employee_id=new_emp.id,
+            salary_structure_id=std_struct.id if std_struct else 1,
+            working_schedule_id=std_schedule.id if std_schedule else None,
+            wage=55000.0,
+            start_date=date(current_year, 1, 1),
+            end_date=None,
+            status=ContractStatus.ACTIVE,
+        )
+        db.add(new_contract)
+
+        # Create default leave allocations
+        all_types = db.query(TimeOffType).all()
+        for lt in all_types:
+            default_days = lt.max_days_per_year if lt.max_days_per_year is not None else 10.0
+            alloc = TimeOffAllocation(
+                employee_id=new_emp.id,
+                leave_type_id=lt.id,
+                allocated_days=default_days,
+                valid_from=date(current_year, 1, 1),
+                valid_to=date(current_year, 12, 31),
+                status=AllocationStatus.APPROVED,
+            )
+            db.add(alloc)
 
     db.commit()
     db.refresh(new_user)
@@ -246,7 +311,7 @@ def create_user(
         email=new_user.email,
         role=new_user.role,
         is_active=new_user.is_active,
-        full_name=request.full_name,
+        full_name=request.full_name or (emp.full_name if emp else new_user.email),
         badge_id=emp.badge_id if emp else None,
         employee_id=emp.id if emp else None,
         created_at=new_user.created_at,

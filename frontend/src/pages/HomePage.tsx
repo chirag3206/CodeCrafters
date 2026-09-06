@@ -67,11 +67,11 @@ export default function HomePage() {
         month: selectedMonth,
         approval_notes: lockNotes,
       });
-      alert(res.data.message || `Attendance for ${homeKpiData?.month_label || selectedMonth} has been approved and locked for payroll processing.`);
+      toast.success(res.data.message || `Attendance for ${homeKpiData?.month_label || selectedMonth} has been approved and locked for payroll processing.`);
       setIsLockModalOpen(false);
       await loadKpis();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to lock attendance period');
+      toast.error(err.response?.data?.detail || 'Failed to lock attendance period');
     } finally {
       setIsLocking(false);
     }
@@ -122,8 +122,9 @@ export default function HomePage() {
       await attendanceApi.punch(action);
       await loadTodayRecord();
       await loadKpis();
+      toast.success(action === 'check_in' ? 'Successfully punched in!' : 'Successfully punched out!');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Punch failed. Please try again.');
+      toast.error(err.response?.data?.detail || 'Punch failed. Please try again.');
     } finally {
       setPunchLoading(false);
     }
@@ -142,7 +143,7 @@ export default function HomePage() {
       } else {
         await grievancesApi.confirmMonth(selectedMonth);
       }
-      alert(`Operational attendance record for ${homeKpiData?.month_label || selectedMonth} confirmed successfully!`);
+      toast.success(`Operational attendance record for ${homeKpiData?.month_label || selectedMonth} confirmed successfully!`);
 
       // Automatically transition to the live current month (September 2026) attendance
       if (selectedMonth !== '2026-09') {
@@ -151,7 +152,7 @@ export default function HomePage() {
         await loadKpis();
       }
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Confirmation failed');
+      toast.error(err.response?.data?.detail || 'Confirmation failed');
     }
   };
 
@@ -171,7 +172,7 @@ export default function HomePage() {
           grievance_remarks: disputeRemarks,
         });
       }
-      alert(`Grievance raised for ${homeKpiData?.month_label || selectedMonth}. HR & Payroll teams have been notified to review and adjust your attendance.`);
+      toast.info(`Grievance raised for ${homeKpiData?.month_label || selectedMonth}. HR & Payroll teams have been notified to review and adjust your attendance.`);
       setIsDisputeOpen(false);
       setDisputeRemarks('');
 
@@ -182,7 +183,7 @@ export default function HomePage() {
         await loadKpis();
       }
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Dispute submission failed');
+      toast.error(err.response?.data?.detail || 'Dispute submission failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -321,11 +322,13 @@ export default function HomePage() {
               {(homeKpiData?.available_months || [
                 { key: '2026-09', label: 'September 2026 (Live Current)' },
                 { key: '2026-08', label: 'August 2026 (Unrun Payrun Cycle)' },
-                { key: '2026-07', label: 'July 2026 (Historical Paid)' },
+                { key: '2026-07', label: 'July 2026 (Unrun Payrun Cycle)' },
                 { key: '2026-06', label: 'June 2026 (Historical Paid)' },
                 { key: '2026-05', label: 'May 2026 (Historical Paid)' },
                 { key: '2026-04', label: 'April 2026 (Historical Paid)' },
                 { key: '2026-03', label: 'March 2026 (Historical Paid)' },
+                { key: '2026-02', label: 'February 2026 (Historical Paid)' },
+                { key: '2026-01', label: 'January 2026 (Historical Paid)' },
               ]).map((m: any) => (
                 <option key={m.key} value={m.key}>
                   {m.label}
@@ -409,22 +412,25 @@ export default function HomePage() {
 
               {/* Step 2 HR Manager Lock Action */}
               {(user?.role === 'HR_Manager' || user?.role === 'Admin') && (
-                <button
-                  id="btn-home-lock-attendance"
-                  onClick={() => setIsLockModalOpen(true)}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition-all shadow-xs ${
-                    homeKpiData.company.is_attendance_locked
-                      ? 'bg-emerald-100 border border-emerald-300 text-emerald-800'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  }`}
-                >
-                  <ShieldCheck size={14} />
-                  <span>
-                    {homeKpiData.company.is_attendance_locked
-                      ? `✓ Attendance Locked (${homeKpiData.month_label})`
-                      : `Approve & Lock Attendance (${homeKpiData.month_label})`}
-                  </span>
-                </button>
+                homeKpiData.company.is_attendance_locked ? (
+                  <div
+                    id="badge-home-attendance-locked"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 shadow-xs cursor-default"
+                    title={`Attendance for ${homeKpiData.month_label} is locked and paid for payroll.`}
+                  >
+                    <ShieldCheck size={14} className="text-emerald-600" />
+                    <span>✓ Attendance Locked ({homeKpiData.month_label})</span>
+                  </div>
+                ) : (
+                  <button
+                    id="btn-home-lock-attendance"
+                    onClick={() => setIsLockModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition-all shadow-xs bg-indigo-600 text-white hover:bg-indigo-700"
+                  >
+                    <ShieldCheck size={14} />
+                    <span>Approve &amp; Lock Attendance ({homeKpiData.month_label})</span>
+                  </button>
+                )
               )}
             </div>
           </div>

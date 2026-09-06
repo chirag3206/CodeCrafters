@@ -164,11 +164,13 @@ def get_email_outbox(skip: int = 0, limit: int = 50, db: Session = Depends(get_d
 AVAILABLE_MONTHS = [
     {"key": "2026-09", "label": "September 2026 (Live Current)"},
     {"key": "2026-08", "label": "August 2026 (Unrun Payrun Cycle)"},
-    {"key": "2026-07", "label": "July 2026 (Historical Paid)"},
+    {"key": "2026-07", "label": "July 2026 (Unrun Payrun Cycle)"},
     {"key": "2026-06", "label": "June 2026 (Historical Paid)"},
     {"key": "2026-05", "label": "May 2026 (Historical Paid)"},
     {"key": "2026-04", "label": "April 2026 (Historical Paid)"},
     {"key": "2026-03", "label": "March 2026 (Historical Paid)"},
+    {"key": "2026-02", "label": "February 2026 (Historical Paid)"},
+    {"key": "2026-01", "label": "January 2026 (Historical Paid)"},
 ]
 
 
@@ -263,12 +265,12 @@ def get_home_kpis(
             Attendance.is_manual_correction == False
         ).count()
 
-        # Period Lock Status
+        # Period Lock Status (Locked if explicitly locked, or historical paid month Jan-Jun 2026)
         lock_rec = db.query(AttendancePeriodLock).filter(AttendancePeriodLock.month == sel_month).first()
-        is_locked = bool(lock_rec and lock_rec.is_locked)
+        is_locked = bool((lock_rec and lock_rec.is_locked) or sel_month <= "2026-06")
         locked_by_name = (
             f"{lock_rec.locked_by.first_name} {lock_rec.locked_by.last_name}"
-            if (lock_rec and lock_rec.locked_by) else None
+            if (lock_rec and lock_rec.locked_by) else ("HR Operations Manager" if sel_month <= "2026-06" else None)
         )
 
         # Unresolved Pre-Payroll Grievances / Disputes for this month

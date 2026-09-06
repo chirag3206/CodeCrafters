@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { salaryConfigApi } from '../services/api';
 import type { SalaryStructure, SalaryRule } from '../types';
 import {
@@ -35,6 +36,7 @@ const defaultRuleForm: RuleFormData = {
 
 export default function SalaryStructuresPage() {
   const { user } = useAuth();
+  const toast = useToast();
   const [structures, setStructures] = useState<SalaryStructure[]>([]);
   const [selectedStructure, setSelectedStructure] = useState<SalaryStructure | null>(null);
   const [rules, setRules] = useState<SalaryRule[]>([]);
@@ -248,10 +250,11 @@ export default function SalaryStructuresPage() {
     }
     try {
       await salaryConfigApi.deleteRule(ruleId);
+      toast.success(`Rule "${ruleName}" deleted successfully.`);
       await loadRules(selectedStructure.id);
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to delete rule');
+      toast.error(err.response?.data?.detail || 'Failed to delete rule');
     }
   };
 

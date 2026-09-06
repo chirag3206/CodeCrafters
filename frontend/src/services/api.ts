@@ -111,10 +111,12 @@ export const leavesApi = {
   createAllocation: (data: any) => api.post('/time-off/allocations', data),
   approveAllocation: (id: number) => api.put(`/time-off/allocations/${id}/approve`),
   refuseAllocation: (id: number) => api.put(`/time-off/allocations/${id}/refuse`),
+  grantBulkAllocation: (data: { employee_ids?: number[]; leave_type_id: number; allocated_days: number; mode: 'add' | 'set' }) =>
+    api.post('/time-off/allocations/grant-bulk', data),
   requests: (params?: { employee_id?: number; status?: string }) => api.get('/time-off/requests', { params }),
   submitRequest: (data: any) => api.post('/time-off/requests', data),
   approveRequest: (id: number) => api.put(`/time-off/requests/${id}/approve`),
-  refuseRequest: (id: number) => api.put(`/time-off/requests/${id}/refuse`),
+  refuseRequest: (id: number, data?: { rejection_reason?: string }) => api.put(`/time-off/requests/${id}/refuse`, data),
 };
 
 // ── Attendance ────────────────────────────────────────────────────────────────

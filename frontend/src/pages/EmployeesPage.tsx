@@ -82,10 +82,11 @@ export default function EmployeesPage() {
         reason: offboardReason,
         notes: offboardNotes.trim() || undefined,
       });
+      toast.success('Employee offboarded successfully.');
       setDeletingEmpId(null);
       loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to offboard employee');
+      toast.error(err.response?.data?.detail || 'Failed to offboard employee');
     } finally {
       setIsDeleting(false);
     }
@@ -231,6 +232,11 @@ export default function EmployeesPage() {
                       {emp.badge_id && (
                         <span className="font-mono text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
                           {emp.badge_id}
+                        </span>
+                      )}
+                      {emp.system_role && emp.system_role !== 'Employee' && (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                          {emp.system_role.replace(/_/g, ' ')}
                         </span>
                       )}
                     </div>

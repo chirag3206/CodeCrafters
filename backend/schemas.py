@@ -172,12 +172,18 @@ class EmployeeBase(BaseModel):
     ifsc_swift: Optional[str] = None
 
 
+class LeaveAllocationInput(BaseModel):
+    leave_type_id: int
+    allocated_days: float
+
+
 class EmployeeCreate(EmployeeBase):
     # Auto-create a login account for this employee on creation
     initial_password: Optional[str] = Field(None, min_length=8, description="If omitted, a secure temp password is auto-generated")
-    # Optionally assign a salary structure (will create a draft contract)
     salary_structure_id: Optional[int] = None
-
+    contract_wage: Optional[float] = Field(None, description="Starting monthly contract base wage (e.g. 55000)")
+    system_role: Optional[UserRole] = Field(UserRole.EMPLOYEE, description="User system access role")
+    leave_allocations: Optional[List[LeaveAllocationInput]] = None
 
 
 class EmployeeUpdate(BaseModel):
@@ -197,9 +203,11 @@ class EmployeeUpdate(BaseModel):
     bank_name: Optional[str] = None
     bank_account_no: Optional[str] = None
     ifsc_swift: Optional[str] = None
+    system_role: Optional[UserRole] = None
     departure_reason: Optional[str] = None
     departure_date: Optional[date] = None
     departure_notes: Optional[str] = None
+    leave_allocations: Optional[List[LeaveAllocationInput]] = None
 
 
 class EmployeeOffboardRequest(BaseModel):
@@ -222,6 +230,7 @@ class EmployeeOut(EmployeeBase):
     avatar_color: Optional[str] = None
     user_id: Optional[int] = None
     has_user_account: bool = False
+    system_role: Optional[UserRole] = None
     departure_reason: Optional[str] = None
     departure_date: Optional[date] = None
     departure_notes: Optional[str] = None
@@ -402,11 +411,24 @@ class TimeOffAllocationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BulkLeaveAllocationGrant(BaseModel):
+    employee_ids: Optional[List[int]] = None  # None or empty = all active employees
+    leave_type_id: int
+    allocated_days: float
+    mode: str = "add"  # "add" (+ top-up) or "set" (fixed total)
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+
+
 class TimeOffRequestCreate(BaseModel):
     leave_type_id: int
     start_date: date
     end_date: date
     reason: Optional[str] = None
+
+
+class TimeOffRequestRefuse(BaseModel):
+    rejection_reason: Optional[str] = None
 
 
 class TimeOffRequestOut(BaseModel):
@@ -417,6 +439,7 @@ class TimeOffRequestOut(BaseModel):
     end_date: date
     duration_days: float
     reason: Optional[str] = None
+    rejection_reason: Optional[str] = None
     status: TimeOffRequestStatus
     approved_at: Optional[datetime] = None
     created_at: datetime

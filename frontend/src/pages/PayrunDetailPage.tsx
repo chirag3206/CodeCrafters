@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { payrunsApi, payslipsApi, grievancesApi } from '../services/api';
 import type { Payrun, Payslip } from '../types';
 import {
@@ -11,6 +12,7 @@ import {
 
 export default function PayrunDetailPage() {
   const { user } = useAuth();
+  const toast = useToast();
   const canApprovePayroll = user?.role === 'HR_Payroll_Manager' || user?.role === 'Admin';
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -56,9 +58,10 @@ export default function PayrunDetailPage() {
     try {
       setActionLoading(true);
       await payrunsApi.compute(Number(id));
+      toast.success('Payrun batch re-computed successfully!');
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Calculation failed');
+      toast.error(err.response?.data?.detail || 'Calculation failed');
     } finally {
       setActionLoading(false);
     }
@@ -69,10 +72,10 @@ export default function PayrunDetailPage() {
     try {
       setActionLoading(true);
       await payrunsApi.sendPreVerification(Number(id));
-      alert('Pre-payroll operational verification statements distributed to employee portals.');
+      toast.success('Pre-payroll operational verification statements distributed to employee portals.');
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to dispatch pre-statements');
+      toast.error(err.response?.data?.detail || 'Failed to dispatch pre-statements');
     } finally {
       setActionLoading(false);
     }
@@ -83,9 +86,10 @@ export default function PayrunDetailPage() {
     try {
       setActionLoading(true);
       await payrunsApi.validate(Number(id));
+      toast.success('Payrun batch validated successfully by HR Payroll Manager!');
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Validation failed');
+      toast.error(err.response?.data?.detail || 'Validation failed');
     } finally {
       setActionLoading(false);
     }
@@ -96,10 +100,10 @@ export default function PayrunDetailPage() {
     try {
       setActionLoading(true);
       await payrunsApi.markPaid(Number(id));
-      alert('Final Sign-Off Complete! The HR Payroll Manager has authorized this payrun. Status is marked as PAID, ReportLab PDFs are generated, and email notifications have been dispatched to all staff. No Admin approval required.');
+      toast.success('Final Sign-Off Complete! Payrun authorized & marked as PAID. ReportLab PDF payslips generated and emailed to all staff.');
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Mark paid failed');
+      toast.error(err.response?.data?.detail || 'Mark paid failed');
     } finally {
       setActionLoading(false);
     }
@@ -110,9 +114,9 @@ export default function PayrunDetailPage() {
     try {
       setActionLoading(true);
       await payrunsApi.sendPayslips(Number(id));
-      alert('Bulk payslip notification emails dispatched and logged to Outbox!');
+      toast.success('Bulk payslip notification emails dispatched and logged to Outbox!');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Email dispatch failed');
+      toast.error(err.response?.data?.detail || 'Email dispatch failed');
     } finally {
       setActionLoading(false);
     }
@@ -126,11 +130,12 @@ export default function PayrunDetailPage() {
         action: resolutionAction,
         resolution_notes: resolutionNotes,
       });
+      toast.success('Grievance decision submitted and payslip adjusted successfully.');
       setResolvingPayslip(null);
       setResolutionNotes('');
       await loadData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Grievance resolution failed');
+      toast.error(err.response?.data?.detail || 'Grievance resolution failed');
     }
   };
 
