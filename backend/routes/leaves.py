@@ -101,10 +101,12 @@ def list_allocations(
         ).scalar() or 0.0
 
         alloc_out = TimeOffAllocationOut.model_validate(alloc)
+        alloc_out.carried_forward_days = float(alloc.carried_forward_days or 0.0)
         alloc_out.approved_taken = float(approved_taken)
         alloc_out.pending_days = float(pending_days)
-        # Remaining Balance = Allocated - Approved Taken
-        alloc_out.remaining_balance = float(alloc.allocated_days - approved_taken)
+        # Remaining Balance = (Allocated + Carried Forward) - Approved Taken
+        total_granted = float(alloc.allocated_days + (alloc.carried_forward_days or 0.0))
+        alloc_out.remaining_balance = float(total_granted - approved_taken)
         result.append(alloc_out)
 
     return result
@@ -260,7 +262,7 @@ def submit_request(data: TimeOffRequestCreate, db: Session = Depends(get_db), cu
 
     # If requires allocation, check balance
     if leave_type.requires_allocation:
-        alloc_total = db.query(func.coalesce(func.sum(TimeOffAllocation.allocated_days), 0.0)).filter(
+        alloc_total = db.query(func.coalesce(func.sum(TimeOffAllocation.allocated_days + TimeOffAllocation.carried_forward_days), 0.0)).filter(
             TimeOffAllocation.employee_id == emp.id,
             TimeOffAllocation.leave_type_id == data.leave_type_id,
             TimeOffAllocation.status == AllocationStatus.APPROVED
@@ -324,3 +326,69 @@ def refuse_request(
     db.commit()
     db.refresh(req)
     return req
+
+
+@router.post("/carry-forward-year-end", response_model=MessageResponse, dependencies=[Depends(require_hr_manager)])
+def carry_forward_year_end(
+    from_year: int = Query(2025, description="Source calendar year"),
+    to_year: int = Query(2026, description="Target calendar year"),
+    db: Session = Depends(get_db)
+):
+    """Carries forward unused paid leave balances (EL) to the next calendar year."""
+    paid_types = db.query(TimeOffType).filter(TimeOffType.is_paid == True, TimeOffType.allow_carry_forward == True).all()
+    if not paid_types:
+        return MessageResponse(message="No paid leave types configured for carry forward", success=True)
+
+    type_ids = [t.id for t in paid_types]
+    active_employees = db.query(Employee).filter(Employee.status == "Active").all()
+
+    carried_count = 0
+    for emp in active_employees:
+        for tid in type_ids:
+            target_alloc = db.query(TimeOffAllocation).filter(
+                TimeOffAllocation.employee_id == emp.id,
+                TimeOffAllocation.leave_type_id == tid,
+                TimeOffAllocation.valid_from >= date(to_year, 1, 1),
+                TimeOffAllocation.valid_to <= date(to_year, 12, 31)
+            ).first()
+
+            source_alloc = db.query(TimeOffAllocation).filter(
+                TimeOffAllocation.employee_id == emp.id,
+                TimeOffAllocation.leave_type_id == tid,
+                TimeOffAllocation.valid_from >= date(from_year, 1, 1),
+                TimeOffAllocation.valid_to <= date(from_year, 12, 31)
+            ).first()
+
+            if source_alloc:
+                taken = db.query(func.coalesce(func.sum(TimeOffRequest.duration_days), 0.0)).filter(
+                    TimeOffRequest.employee_id == emp.id,
+                    TimeOffRequest.leave_type_id == tid,
+                    TimeOffRequest.status == TimeOffRequestStatus.APPROVED,
+                    TimeOffRequest.start_date >= date(from_year, 1, 1),
+                    TimeOffRequest.end_date <= date(from_year, 12, 31)
+                ).scalar() or 0.0
+
+                unused = (source_alloc.allocated_days + (source_alloc.carried_forward_days or 0.0)) - float(taken)
+                if unused > 0:
+                    if not target_alloc:
+                        lt = db.query(TimeOffType).filter(TimeOffType.id == tid).first()
+                        default_days = lt.max_days_per_year if lt and lt.max_days_per_year is not None else 10.0
+                        target_alloc = TimeOffAllocation(
+                            employee_id=emp.id,
+                            leave_type_id=tid,
+                            allocated_days=default_days,
+                            carried_forward_days=unused,
+                            valid_from=date(to_year, 1, 1),
+                            valid_to=date(to_year, 12, 31),
+                            status=AllocationStatus.APPROVED
+                        )
+                        db.add(target_alloc)
+                    else:
+                        target_alloc.carried_forward_days = unused
+                    carried_count += 1
+
+    db.commit()
+    return MessageResponse(
+        message=f"Successfully carried forward unused paid leaves (EL) from {from_year} to {to_year} for {carried_count} allocation record(s).",
+        success=True
+    )

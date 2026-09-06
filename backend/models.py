@@ -246,6 +246,9 @@ class Employee(Base):
     departure_reason: Mapped[Optional[str]] = mapped_column(String(100))
     departure_date: Mapped[Optional[date]] = mapped_column(Date)
     departure_notes: Mapped[Optional[str]] = mapped_column(Text)
+    # Offboarding Leave Encashment Tracking (EL / Paid Leaves)
+    leave_encashment_days: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    leave_encashment_amount: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
@@ -361,6 +364,7 @@ class TimeOffType(Base):
     unit: Mapped[LeaveUnit] = mapped_column(Enum(LeaveUnit), default=LeaveUnit.DAYS)
     requires_allocation: Mapped[bool] = mapped_column(Boolean, default=True)
     is_paid: Mapped[bool] = mapped_column(Boolean, default=True)  # False = Loss of Pay (LOP)
+    allow_carry_forward: Mapped[bool] = mapped_column(Boolean, default=True)  # True = Paid leaves (EL) carry forward to next calendar year
     color: Mapped[Optional[str]] = mapped_column(String(20), default="#4F46E5")
     max_days_per_year: Mapped[Optional[float]] = mapped_column(Float)
 
@@ -380,6 +384,7 @@ class TimeOffAllocation(Base):
     employee_id: Mapped[int] = mapped_column(Integer, ForeignKey("employees.id"), nullable=False)
     leave_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("time_off_types.id"), nullable=False)
     allocated_days: Mapped[float] = mapped_column(Float, nullable=False)
+    carried_forward_days: Mapped[float] = mapped_column(Float, default=0.0)  # Carried forward EL balance
     valid_from: Mapped[Optional[date]] = mapped_column(Date)
     valid_to: Mapped[Optional[date]] = mapped_column(Date)
     status: Mapped[AllocationStatus] = mapped_column(Enum(AllocationStatus), default=AllocationStatus.DRAFT)
@@ -493,6 +498,8 @@ class Payslip(Base):
     worked_days: Mapped[float] = mapped_column(Float, default=0.0)
     paid_leave_days: Mapped[float] = mapped_column(Float, default=0.0)
     unpaid_leave_days: Mapped[float] = mapped_column(Float, default=0.0)
+    leave_encashment_days: Mapped[float] = mapped_column(Float, default=0.0)
+    leave_encashment_amount: Mapped[float] = mapped_column(Float, default=0.0)
     overtime_hours: Mapped[float] = mapped_column(Float, default=0.0)
     # Financials
     gross_pay: Mapped[float] = mapped_column(Float, default=0.0)

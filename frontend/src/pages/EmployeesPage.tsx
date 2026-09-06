@@ -430,6 +430,7 @@ export default function EmployeesPage() {
               <ul className="list-disc list-inside space-y-0.5 text-amber-700 text-[11px]">
                 <li>Employee status will be updated to selected departure state</li>
                 <li>All <b>active and draft contracts</b> will automatically move to <b>Expired</b> (end date set to today)</li>
+                <li>All unused <b>Earned Leaves (EL / Paid Leaves)</b> will be counted and <b>encashed</b> into the final salary settlement</li>
                 <li>User portal login will be disabled; payroll history remains preserved</li>
               </ul>
             </div>

@@ -58,6 +58,7 @@ def compute_payslip(
     paid_leave_days: float,
     overtime_hours: float,
     rules_list: List[Any],
+    leave_encashment_amount: float = 0.0,
 ) -> Tuple[float, float, float, List[dict]]:
     """
     Execute salary rules in strict ascending sequence.
@@ -70,10 +71,6 @@ def compute_payslip(
     wage_val = getattr(contract, "wage", 0.0) if contract else 0.0
 
     # Prorated wage calculation:
-    # If employee was employed for only a partial period (e.g. joined/left mid-month where total_accounted_days < total_working_days),
-    # scale full-month contract wage to the employed days.
-    # For a full month (worked + paid_leave + unpaid_leave == total_working_days), contract.wage remains full,
-    # and unpaid leave is deducted via LOP_DEDUCTION rule without double deduction.
     total_accounted_days = worked_days + paid_leave_days + unpaid_leave_days
     if total_working_days > 0 and total_accounted_days < total_working_days:
         prorated_wage = round((wage_val / total_working_days) * total_accounted_days, 2)
@@ -81,7 +78,6 @@ def compute_payslip(
         prorated_wage = wage_val
 
     # Build a contract proxy that exposes prorated_wage as .wage
-    # so salary rules using `contract.wage` automatically get the prorated value.
     class _ContractProxy:
         def __init__(self, orig, prorated):
             self._orig = orig
@@ -167,6 +163,19 @@ def compute_payslip(
         "NET_SALARY",
         round(gross - deductions, 2)
     )
+
+    if leave_encashment_amount > 0:
+        encash_val = round(leave_encashment_amount, 2)
+        payslip_lines.append({
+            "rule_id": None,
+            "rule_name": "Leave Encashment (EL)",
+            "rule_code": "LEAVE_ENCASHMENT",
+            "category": "ALLOWANCE",
+            "sequence": 15,
+            "amount": encash_val,
+        })
+        gross = round(gross + encash_val, 2)
+        net = round(net + encash_val, 2)
 
     return round(gross, 2), round(deductions, 2), round(net, 2), payslip_lines
 

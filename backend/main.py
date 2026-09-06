@@ -31,11 +31,20 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:
         from sqlalchemy import text
-        try:
-            conn.execute(text("ALTER TABLE time_off_requests ADD COLUMN rejection_reason TEXT"))
-            conn.commit()
-        except Exception:
-            pass  # Column already exists
+        for col_def in [
+            "ALTER TABLE time_off_requests ADD COLUMN rejection_reason TEXT",
+            "ALTER TABLE time_off_types ADD COLUMN allow_carry_forward BOOLEAN DEFAULT 1",
+            "ALTER TABLE time_off_allocations ADD COLUMN carried_forward_days FLOAT DEFAULT 0.0",
+            "ALTER TABLE employees ADD COLUMN leave_encashment_days FLOAT DEFAULT 0.0",
+            "ALTER TABLE employees ADD COLUMN leave_encashment_amount FLOAT DEFAULT 0.0",
+            "ALTER TABLE payslips ADD COLUMN leave_encashment_days FLOAT DEFAULT 0.0",
+            "ALTER TABLE payslips ADD COLUMN leave_encashment_amount FLOAT DEFAULT 0.0",
+        ]:
+            try:
+                conn.execute(text(col_def))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists
     os.makedirs("generated_payslips", exist_ok=True)
     # Ensure all users (including HR & Admins) have active employee profiles & contracts for payroll
     from database import SessionLocal

@@ -151,3 +151,88 @@ def test_contract_edit_and_delete_rbac():
         )
     finally:
         db.close()
+
+
+def test_el_carry_forward_and_encashment_on_offboard():
+    db = SessionLocal()
+    import time
+    from models import TimeOffType, TimeOffAllocation, AllocationStatus
+    unique_suffix = int(time.time())
+    test_email = f"el.encash.{unique_suffix}@peoplepay360.com"
+    try:
+        user = User(
+            email=test_email,
+            hashed_password="hashed_dummy_pw",
+            role=UserRole.EMPLOYEE,
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+
+        emp = Employee(
+            user_id=user.id,
+            badge_id=f"EMP-EL-{unique_suffix}",
+            first_name="Earned",
+            last_name="LeaveTester",
+            work_email=test_email,
+            status=EmployeeStatus.ACTIVE,
+            employment_type="Full-Time",
+        )
+        db.add(emp)
+        db.flush()
+
+        # Contract wage = 60000 -> Daily rate = 2000
+        structure = db.query(SalaryStructure).first()
+        contract = Contract(
+            reference=f"CNT.EL.{unique_suffix}",
+            employee_id=emp.id,
+            salary_structure_id=structure.id if structure else None,
+            wage=60000.0,
+            start_date=date(2026, 1, 1),
+            status=ContractStatus.ACTIVE,
+        )
+        db.add(contract)
+
+        # Paid leave type (Earned Leave)
+        el_type = db.query(TimeOffType).filter(TimeOffType.is_paid == True).first()
+        assert el_type is not None
+
+        alloc = TimeOffAllocation(
+            employee_id=emp.id,
+            leave_type_id=el_type.id,
+            allocated_days=10.0,
+            carried_forward_days=5.0,  # 5 days carried forward from previous year
+            valid_from=date(2026, 1, 1),
+            valid_to=date(2026, 12, 31),
+            status=AllocationStatus.APPROVED,
+        )
+        db.add(alloc)
+        db.commit()
+
+        # HR Manager offboards employee
+        hr_user = db.query(User).filter(User.role == UserRole.HR_MANAGER).first()
+        token = create_access_token(data={"sub": str(hr_user.id), "role": hr_user.role.value})
+        headers = {"Authorization": f"Bearer {token}"}
+
+        res = client.post(
+            f"/api/employees/{emp.id}/offboard",
+            json={"reason": "Resigned", "notes": "EL encashment test"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        msg = res.json()["message"]
+        assert "Unused EL Paid Leaves: 15.0 day(s)" in msg
+        assert "Leave Encashment ₹30,000.00" in msg
+
+        db.refresh(emp)
+        assert emp.leave_encashment_days == 15.0
+        assert emp.leave_encashment_amount == 30000.0
+
+        # Cleanup
+        db.delete(alloc)
+        db.delete(contract)
+        db.delete(emp)
+        db.delete(user)
+        db.commit()
+    finally:
+        db.close()

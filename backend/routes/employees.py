@@ -447,9 +447,63 @@ def _execute_employee_offboard(emp: Employee, reason: str, notes: Optional[str],
         if not cnt.end_date or cnt.end_date > date.today():
             cnt.end_date = date.today()
 
+    # Calculate Earned Leaves (EL / Paid Leaves) Encashment for final settlement
+    from models import TimeOffAllocation, TimeOffRequest, TimeOffRequestStatus, Payslip, PayslipLine, RuleCategory, PayslipStatus
+    allocations = db.query(TimeOffAllocation).filter(TimeOffAllocation.employee_id == emp.id).all()
+
+    total_unused_el = 0.0
+    for alloc in allocations:
+        if alloc.leave_type and alloc.leave_type.is_paid:
+            approved_taken = db.query(func.coalesce(func.sum(TimeOffRequest.duration_days), 0.0)).filter(
+                TimeOffRequest.employee_id == emp.id,
+                TimeOffRequest.leave_type_id == alloc.leave_type_id,
+                TimeOffRequest.status == TimeOffRequestStatus.APPROVED
+            ).scalar() or 0.0
+            total_granted = float(alloc.allocated_days + (alloc.carried_forward_days or 0.0))
+            unused = total_granted - float(approved_taken)
+            if unused > 0:
+                total_unused_el += unused
+
+    recent_contract = db.query(Contract).filter(
+        Contract.employee_id == emp.id
+    ).order_by(Contract.id.desc()).first()
+
+    base_wage = recent_contract.wage if recent_contract else 55000.0
+    daily_rate = round(base_wage / 30.0, 2)
+    encashment_amount = round(total_unused_el * daily_rate, 2)
+
+    emp.leave_encashment_days = round(total_unused_el, 2)
+    emp.leave_encashment_amount = encashment_amount
+
+    latest_payslip = db.query(Payslip).filter(
+        Payslip.employee_id == emp.id
+    ).order_by(Payslip.id.desc()).first()
+
+    if latest_payslip and latest_payslip.status in [PayslipStatus.DRAFT, PayslipStatus.COMPUTED]:
+        latest_payslip.leave_encashment_days = emp.leave_encashment_days
+        latest_payslip.leave_encashment_amount = encashment_amount
+        existing_line = db.query(PayslipLine).filter(
+            PayslipLine.payslip_id == latest_payslip.id,
+            PayslipLine.rule_code == "LEAVE_ENCASHMENT"
+        ).first()
+        if existing_line:
+            existing_line.amount = encashment_amount
+        else:
+            db.add(PayslipLine(
+                payslip_id=latest_payslip.id,
+                rule_name="Leave Encashment (EL)",
+                rule_code="LEAVE_ENCASHMENT",
+                category=RuleCategory.ALLOWANCE,
+                sequence=15,
+                amount=encashment_amount,
+            ))
+        latest_payslip.gross_pay = round(latest_payslip.gross_pay + encashment_amount, 2)
+        latest_payslip.net_pay = round(latest_payslip.net_pay + encashment_amount, 2)
+
     db.commit()
+
     return MessageResponse(
-        message=f"Employee {emp.first_name} {emp.last_name} offboarded as '{new_status.value}'. {len(active_contracts)} contract(s) automatically transitioned to Expired.",
+        message=f"Employee {emp.first_name} {emp.last_name} offboarded as '{new_status.value}'. Unused EL Paid Leaves: {total_unused_el:.1f} day(s). Leave Encashment ₹{encashment_amount:,.2f} added to final salary settlement.",
         success=True
     )
 

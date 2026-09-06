@@ -192,6 +192,11 @@ def _execute_compute_payrun(payrun: Payrun, db: Session) -> Payrun:
         contract_structure = (contract.salary_structure if contract and contract.salary_structure else None) or payrun.salary_structure or default_structure
         contract_rules = contract_structure.rules if contract_structure else []
 
+        emp = slip.employee or db.query(Employee).filter(Employee.id == slip.employee_id).first()
+        leave_encash = emp.leave_encashment_amount if (emp and emp.leave_encashment_amount) else 0.0
+        slip.leave_encashment_days = float(emp.leave_encashment_days or 0.0) if emp else 0.0
+        slip.leave_encashment_amount = float(leave_encash)
+
         # Sequenced calculation using the employee's contract rules
         gross, deduct, net, lines = compute_payslip(
             contract=contract,
@@ -201,6 +206,7 @@ def _execute_compute_payrun(payrun: Payrun, db: Session) -> Payrun:
             paid_leave_days=paid_leaves,
             overtime_hours=overtime_hours,
             rules_list=contract_rules,
+            leave_encashment_amount=leave_encash,
         )
 
         slip.gross_pay = gross

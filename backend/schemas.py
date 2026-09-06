@@ -234,6 +234,8 @@ class EmployeeOut(EmployeeBase):
     departure_reason: Optional[str] = None
     departure_date: Optional[date] = None
     departure_notes: Optional[str] = None
+    leave_encashment_days: Optional[float] = 0.0
+    leave_encashment_amount: Optional[float] = 0.0
     created_at: datetime
     department: Optional[DepartmentOut] = None
     job_position: Optional[JobPositionOut] = None
@@ -388,6 +390,7 @@ class TimeOffTypeOut(BaseModel):
     unit: LeaveUnit
     requires_allocation: bool
     is_paid: bool
+    allow_carry_forward: bool = True
     color: Optional[str] = None
     max_days_per_year: Optional[float] = None
 
@@ -399,6 +402,7 @@ class TimeOffAllocationOut(BaseModel):
     employee_id: int
     leave_type_id: int
     allocated_days: float
+    carried_forward_days: float = 0.0
     valid_from: Optional[date] = None
     valid_to: Optional[date] = None
     status: AllocationStatus

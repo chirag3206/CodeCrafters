@@ -2,7 +2,7 @@
 PeoplePay360 — Database Engine Configuration
 Supports PostgreSQL & SQLite with automatic connection pooling and fallback.
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from config import get_settings
 import logging
@@ -33,6 +33,23 @@ except Exception as err:
     engine = create_engine(fallback_url, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Auto-migrate missing columns for PostgreSQL/SQLite
+for _col_def in [
+    "ALTER TABLE time_off_requests ADD COLUMN rejection_reason TEXT",
+    "ALTER TABLE time_off_types ADD COLUMN allow_carry_forward BOOLEAN DEFAULT TRUE",
+    "ALTER TABLE time_off_allocations ADD COLUMN carried_forward_days FLOAT DEFAULT 0.0",
+    "ALTER TABLE employees ADD COLUMN leave_encashment_days FLOAT DEFAULT 0.0",
+    "ALTER TABLE employees ADD COLUMN leave_encashment_amount FLOAT DEFAULT 0.0",
+    "ALTER TABLE payslips ADD COLUMN leave_encashment_days FLOAT DEFAULT 0.0",
+    "ALTER TABLE payslips ADD COLUMN leave_encashment_amount FLOAT DEFAULT 0.0",
+]:
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(_col_def))
+            _conn.commit()
+    except Exception:
+        pass
 
 
 class Base(DeclarativeBase):
