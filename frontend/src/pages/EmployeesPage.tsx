@@ -78,15 +78,17 @@ export default function EmployeesPage() {
     if (!deletingEmpId) return;
     try {
       setIsDeleting(true);
-      await employeesApi.offboard(deletingEmpId, {
+      const res = await employeesApi.offboard(deletingEmpId, {
         reason: offboardReason,
         notes: offboardNotes.trim() || undefined,
       });
-      toast.success('Employee offboarded successfully.');
+      toast.success(res.data?.message || 'Employee offboarded successfully.');
       setDeletingEmpId(null);
-      loadData();
+      setSelectedStatus('');
+      await loadData();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Failed to offboard employee');
+      console.error('Offboard error:', err);
+      toast.error(err.response?.data?.detail || err.message || 'Failed to offboard employee');
     } finally {
       setIsDeleting(false);
     }
@@ -469,12 +471,14 @@ export default function EmployeesPage() {
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
+                type="button"
                 onClick={() => setDeletingEmpId(null)}
                 className="btn-secondary text-xs"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
                 className="btn-danger text-xs font-semibold"
