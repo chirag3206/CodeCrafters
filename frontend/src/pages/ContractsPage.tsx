@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { toast } from '../contexts/ToastContext';
 import { contractsApi, employeesApi, salaryConfigApi } from '../services/api';
 import type { Contract, Employee, SalaryStructure, Department, JobPosition, WorkingSchedule } from '../types';
 import { FileText, Plus, Calendar, X, AlertCircle, Edit3, Trash2, Search } from 'lucide-react';

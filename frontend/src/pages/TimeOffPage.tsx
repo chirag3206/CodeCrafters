@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { toast } from '../contexts/ToastContext';
 import { leavesApi, employeesApi } from '../services/api';
 import type { TimeOffRequest, TimeOffAllocation, TimeOffType } from '../types';
 import {
-  Calendar, Plus, BarChart3, X, Users, ChevronDown, ChevronUp, Layers, List
+  Calendar, Plus, BarChart3, X, ChevronDown, ChevronUp, Layers, List
 } from 'lucide-react';
 
 export default function TimeOffPage() {

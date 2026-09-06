@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { toast } from '../contexts/ToastContext';
 import { grievancesApi, attendanceApi, dashboardApi } from '../services/api';
 import type { Attendance } from '../types';
 import {

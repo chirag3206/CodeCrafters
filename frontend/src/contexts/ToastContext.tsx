@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info';
@@ -16,6 +16,24 @@ interface ToastContextType {
   info: (message: string) => void;
 }
 
+type ToastListener = (message: string, type: ToastType) => void;
+let globalToastListener: ToastListener | null = null;
+
+export const toast = {
+  success: (message: string) => {
+    if (globalToastListener) globalToastListener(message, 'success');
+  },
+  error: (message: string) => {
+    if (globalToastListener) globalToastListener(message, 'error');
+  },
+  info: (message: string) => {
+    if (globalToastListener) globalToastListener(message, 'info');
+  },
+  showToast: (message: string, type: ToastType = 'success') => {
+    if (globalToastListener) globalToastListener(message, type);
+  },
+};
+
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -25,9 +43,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts((prev) => meFilter(prev, id));
     }, 4500);
   }, []);
+
+  const meFilter = (prev: ToastItem[], id: string) => prev.filter((t) => t.id !== id);
+
+  useEffect(() => {
+    globalToastListener = showToast;
+    return () => {
+      globalToastListener = null;
+    };
+  }, [showToast]);
 
   const success = useCallback((message: string) => showToast(message, 'success'), [showToast]);
   const error = useCallback((message: string) => showToast(message, 'error'), [showToast]);
@@ -75,7 +102,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
+    return toast;
   }
   return context;
 }
