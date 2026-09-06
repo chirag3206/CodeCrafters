@@ -336,6 +336,11 @@ def update_user(
         user.role = request.role
     if request.is_active is not None:
         user.is_active = request.is_active
+        if request.is_active is False and user.employee:
+            from routes.employees import _execute_employee_offboard
+            from models import EmployeeStatus
+            if user.employee.status == EmployeeStatus.ACTIVE:
+                _execute_employee_offboard(user.employee, "Account Deactivated by Admin", None, db)
 
     db.commit()
     db.refresh(user)
@@ -350,6 +355,34 @@ def update_user(
         badge_id=emp.badge_id if emp else None,
         employee_id=emp.id if emp else None,
         created_at=user.created_at,
+    )
+
+
+@router.delete("/users/{user_id}", response_model=MessageResponse)
+def delete_user(
+    user_id: int,
+    current_user=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Admin-only: delete a user account and calculate final leave encashment settlement."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account.")
+
+    emp = user.employee
+    encashment_msg = ""
+    if emp:
+        from routes.employees import _execute_employee_offboard
+        offboard_res = _execute_employee_offboard(emp, "User Account Deleted", None, db)
+        encashment_msg = f" {offboard_res.message}"
+
+    db.delete(user)
+    db.commit()
+    return MessageResponse(
+        message=f"User account '{user.email}' deleted.{encashment_msg}",
+        success=True,
     )
 
 
