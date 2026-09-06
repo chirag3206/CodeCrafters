@@ -20,6 +20,54 @@ from schemas import (
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
+
+# ── SMTP Test Email (Admin only) ────────────────────────────────────────────
+
+@router.post("/test-email", response_model=MessageResponse, dependencies=[Depends(require_admin)])
+def test_smtp_email(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Sends a test email to the logged-in Admin to verify SMTP config."""
+    from config import get_settings
+    from services.email_service import dispatch_email
+    settings = get_settings()
+
+    if not settings.SMTP_HOST or not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+        raise HTTPException(
+            status_code=400,
+            detail="SMTP not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASSWORD in .env"
+        )
+
+    result = dispatch_email(
+        recipient_email=current_user.email,
+        recipient_name=current_user.email,
+        subject="PeoplePay360 - SMTP Test Successful",
+        body_html=f"""
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
+          <div style="background:linear-gradient(135deg,#4338ca,#6366f1);padding:24px 28px;border-radius:10px 10px 0 0">
+            <h2 style="color:#fff;margin:0">SMTP Connected!</h2>
+            <p style="color:#c7d2fe;margin:6px 0 0">PeoplePay360 Email System</p>
+          </div>
+          <div style="background:#f8fafc;padding:24px 28px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px">
+            <p>Hi <b>{current_user.email}</b>,</p>
+            <p>Your Gmail SMTP is working correctly. Payslip PDFs will now be emailed to employees automatically when payroll is marked as paid.</p>
+            <p style="color:#64748b;font-size:12px;margin-top:20px">
+              Sent from: <b>{settings.SMTP_USER}</b><br>
+              Host: <b>{settings.SMTP_HOST}:{settings.SMTP_PORT}</b>
+            </p>
+          </div>
+        </div>
+        """,
+        email_type="test",
+        db=db,
+    )
+
+    if result.status.value == "failed":
+        raise HTTPException(status_code=500, detail=f"SMTP failed: {result.error_message}")
+
+    return MessageResponse(
+        message=f"Test email sent to {current_user.email}. Check your inbox!",
+        success=True
+    )
+
 # ── Demo persona email map ──────────────────────────────────────────────────
 PERSONA_MAP = {
     # Indian Corporate Personas
