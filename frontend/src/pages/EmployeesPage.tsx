@@ -21,7 +21,7 @@ export default function EmployeesPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState<number | ''>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('Active');
   const [sortBy, setSortBy] = useState<'newest' | 'name'>('newest');
 
   // Modals

@@ -68,14 +68,33 @@ def compute_payslip(
 
     # Safe proxy for contract if ORM model or mock
     wage_val = getattr(contract, "wage", 0.0) if contract else 0.0
-    contract_proxy = {"wage": wage_val}
+
+    # Prorated wage: scale full-month wage by days actually payable
+    # payable_days = worked_days (attendance) + paid_leave_days (approved paid leave)
+    # For a complete month, prorated_wage == contract.wage.
+    # For a partial period (e.g., Sep 1-5), it correctly scales down.
+    payable_days = worked_days + paid_leave_days
+    prorated_wage = round((wage_val / total_working_days) * payable_days, 2) if total_working_days > 0 else wage_val
+
+    # Build a contract proxy that exposes prorated_wage as .wage
+    # so salary rules using `contract.wage` automatically get the prorated value.
+    class _ContractProxy:
+        def __init__(self, orig, prorated):
+            self._orig = orig
+            self.wage = prorated
+        def __getattr__(self, name):
+            return getattr(self._orig, name)
+
+    contract_proxy = _ContractProxy(contract, prorated_wage) if contract else type("ContractMock", (), {"wage": 0.0})()
 
     context = {
-        "contract": contract if contract else type("ContractMock", (), {"wage": 0.0})(),
+        "contract": contract_proxy,
         "worked_days": worked_days,
         "total_working_days": total_working_days,
         "unpaid_leave_days": unpaid_leave_days,
         "paid_leave_days": paid_leave_days,
+        "payable_days": payable_days,
+        "prorated_wage": prorated_wage,
         "overtime_hours": overtime_hours,
         "rules": {},
         "categories": {
@@ -155,6 +174,8 @@ def validate_formula(formula: str) -> dict:
             "total_working_days": 22,
             "unpaid_leave_days": 1.0,
             "paid_leave_days": 1.0,
+            "payable_days": 21.0,
+            "prorated_wage": round((6500.0 / 22) * 21, 2),
             "overtime_hours": 2.5,
             "rules": {
                 "BASIC": 6500.0,

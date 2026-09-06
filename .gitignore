@@ -1,13 +1,15 @@
-# Node dependencies & build
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
 node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
+frontend/.vite/
 *.local
 
-# Python & Virtualenv
+# ─── Python / Backend ─────────────────────────────────────────────────────────
 __pycache__/
 */__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 .venv/
@@ -15,27 +17,51 @@ venv/
 ENV/
 env/
 
-# SQLite Database & Storage
+# ─── Database files ───────────────────────────────────────────────────────────
 *.db
 *.sqlite
 *.sqlite3
 backend/*.db
+
+# ─── Generated payslip PDFs ───────────────────────────────────────────────────
 generated_payslips/
 backend/generated_payslips/
 
-# IDE & OS files
+# ─── Environment & Secrets (NEVER commit these) ───────────────────────────────
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# ─── Test & Coverage ──────────────────────────────────────────────────────────
+.pytest_cache/
+backend/.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ─── IDE & Editor ─────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# ─── OS files ─────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Logs
+# ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pip-log.txt
 
-# Environment secrets
-.env
-backend/.env
-*.env
+# ─── Build artifacts ──────────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/

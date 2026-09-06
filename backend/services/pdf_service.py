@@ -104,7 +104,7 @@ def _build_payslip_story(payslip: Payslip) -> list:
     for line in payslip.lines:
         amt = f"INR {line.amount:,.2f}"
         if line.category == "DEDUCTION":
-            amt = f"(INR {line.amount:,.2f})"
+            amt = f"-INR {line.amount:,.2f}"
         rows.append([
             Paragraph(str(line.sequence), lbl),
             Paragraph(line.rule_name, lbl),
@@ -129,7 +129,7 @@ def _build_payslip_story(payslip: Payslip) -> list:
         [Paragraph("<b>Gross Salary (After LOP):</b>", lbl),
          Paragraph(f"<b>INR {payslip.gross_pay:,.2f}</b>", val)],
         [Paragraph("<b>Total Statutory Deductions:</b>", lbl),
-         Paragraph(f"<b>(INR {payslip.total_deductions:,.2f})</b>", val)],
+         Paragraph(f"<b>-INR {payslip.total_deductions:,.2f}</b>", val)],
         [Paragraph("<font size='11'><b>NET TAKE-HOME SALARY PAYABLE:</b></font>", lbl),
          Paragraph(f"<font size='12' color='#10B981'><b>INR {payslip.net_pay:,.2f}</b></font>", val)],
     ]

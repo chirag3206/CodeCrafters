@@ -27,7 +27,7 @@ export default function ContractsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState<number | ''>('');
   const [selectedStructureFilter, setSelectedStructureFilter] = useState<number | ''>('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('Active');
 
   // Modals & Actions
   const [isModalOpen, setIsModalOpen] = useState(false);
